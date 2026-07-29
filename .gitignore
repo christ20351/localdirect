@@ -5,8 +5,6 @@ dist/
 out/
 build/
 *.log
-.env
-.env.local
 
 # Flutter / Dart
 .dart_tool/
