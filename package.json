@@ -1,0 +1,17 @@
+{
+  "name": "locadirect-monorepo",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Plateforme de location immobilière pour le Cameroun - Monorepo",
+  "scripts": {
+    "dev:api": "pnpm --filter api dev",
+    "dev:admin": "pnpm --filter admin dev",
+    "dev:web": "pnpm --filter web dev",
+    "build:all": "pnpm -r build",
+    "infra:up": "docker-compose -f infra/docker-compose.yml up -d",
+    "infra:down": "docker-compose -f infra/docker-compose.yml down"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  }
+}

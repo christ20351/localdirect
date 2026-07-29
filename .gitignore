@@ -1,0 +1,29 @@
+# Node
+node_modules/
+dist/
+.next/
+out/
+build/
+*.log
+.env
+.env.local
+
+# Flutter / Dart
+.dart_tool/
+.pub-cache/
+.pub/
+build/
+apps/mobile/.flutter-plugins
+apps/mobile/.flutter-plugins-dependencies
+apps/mobile/.packages
+
+# Docker & Storage
+infra/data/
+*.db
+*.sqlite
+
+# IDE
+.idea/
+.vscode/
+*.swp
+.DS_Store

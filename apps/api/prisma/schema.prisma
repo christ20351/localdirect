@@ -1,0 +1,835 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// =========================================================
+// ENUMS
+// =========================================================
+enum RoleUtilisateur {
+  LOCATAIRE
+  BAILLEUR
+  AGENT
+  STAFF
+  ADMIN
+}
+
+enum StatutKyc {
+  NON_SOUMIS
+  EN_ATTENTE
+  VALIDE
+  REJETE
+  EXPIRE
+}
+
+enum StatutVille {
+  FERMEE
+  PRE_LANCEMENT
+  OUVERTE
+}
+
+enum TypeBien {
+  CHAMBRE_SIMPLE
+  CHAMBRE_MODERNE
+  STUDIO
+  APPARTEMENT
+  DUPLEX
+  MAISON
+  VILLA
+  BOUTIQUE
+  BUREAU
+  TERRAIN
+}
+
+enum StatutBien {
+  BROUILLON
+  EN_VERIFICATION
+  DISPONIBLE
+  RESERVE
+  LOUE
+  SUSPENDU
+  EXPIRE
+  REJETE
+}
+
+enum TypeMandat {
+  SIMPLE
+  EXCLUSIF
+  PROPRIETAIRE_DIRECT
+}
+
+enum StatutVisite {
+  DEMANDEE
+  PAYEE
+  PLANIFIEE
+  CHECK_IN
+  REALISEE
+  CONFIRMEE
+  CONTESTEE
+  ANNULEE
+  REMBOURSEE
+  NO_SHOW
+}
+
+enum StatutCandidature {
+  BROUILLON
+  SOUMISE
+  EN_EXAMEN
+  ACCEPTEE
+  REFUSEE
+  RETIREE
+}
+
+enum StatutBail {
+  PROJET
+  A_SIGNER
+  ACTIF
+  PREAVIS
+  TERMINE
+  RESILIE
+  LITIGE
+}
+
+enum TypePaiement {
+  FRAIS_VISITE
+  FRAIS_SERVICE
+  BOOST
+  AVANCE
+  CAUTION
+  LOYER
+  REVERSEMENT_AGENT
+  REMBOURSEMENT
+}
+
+enum StatutPaiement {
+  INITIE
+  EN_ATTENTE
+  REUSSI
+  ECHOUE
+  ANNULE
+  REMBOURSE
+}
+
+enum MethodePaiement {
+  MTN_MOMO
+  ORANGE_MONEY
+  CARTE
+  VIREMENT
+  ESPECES
+}
+
+enum TypeEtatLieux {
+  ENTREE
+  SORTIE
+}
+
+enum StatutLitige {
+  OUVERT
+  EN_INSTRUCTION
+  RESOLU
+  REJETE
+  ESCALADE
+}
+
+enum Langue {
+  FR
+  EN
+}
+
+// =========================================================
+// GEOGRAPHIE
+// =========================================================
+model Ville {
+  id           String        @id @default(uuid()) @db.Uuid
+  nom          String
+  region       String
+  slug         String        @unique
+  statut       StatutVille   @default(FERMEE)
+  latitude     Float?
+  longitude    Float?
+  parametres   Json          @default("{}")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+  
+  quartiers    Quartier[]
+  utilisateurs Utilisateur[]
+  agents       Agent[]
+  biens        Bien[]
+
+  @@map("ville")
+}
+
+model Quartier {
+  id             String          @id @default(uuid()) @db.Uuid
+  villeId        String          @map("ville_id") @db.Uuid
+  ville          Ville           @relation(fields: [villeId], references: [id], onDelete: Cascade)
+  nom            String
+  slug           String
+  aliases        String[]        @default([])
+  latitude       Float?
+  longitude      Float?
+  actif          Boolean         @default(true)
+  
+  reperes        PointRepere[]
+  biens          Bien[]
+  referencesPrix ReferencePrix[]
+
+  @@unique([villeId, slug])
+  @@map("quartier")
+}
+
+model PointRepere {
+  id         String   @id @default(uuid()) @db.Uuid
+  quartierId String   @map("quartier_id") @db.Uuid
+  quartier   Quartier @relation(fields: [quartierId], references: [id], onDelete: Cascade)
+  nom        String
+  latitude   Float
+  longitude  Float
+  
+  biens      Bien[]
+
+  @@map("point_repere")
+}
+
+// =========================================================
+// UTILISATEURS & KYC & AGENT
+// =========================================================
+model Utilisateur {
+  id                String                 @id @default(uuid()) @db.Uuid
+  telephone         String                 @unique
+  telephoneVerifie Boolean                @default(false) @map("telephone_verifie")
+  email             String?                @unique
+  nomComplet        String?                @map("nom_complet")
+  photoUrl          String?                @map("photo_url")
+  roles             RoleUtilisateur[]      @default([LOCATAIRE])
+  langue            Langue                 @default(FR)
+  villeId           String?                @map("ville_id") @db.Uuid
+  ville             Ville?                 @relation(fields: [villeId], references: [id])
+  statutKyc         StatutKyc              @default(NON_SOUMIS) @map("statut_kyc")
+  motDePasseHash    String?                @map("mot_de_passe_hash")
+  whatsappOptin     Boolean                @default(false) @map("whatsapp_optin")
+  derniereActivite  DateTime?              @map("derniere_activite")
+  bloque            Boolean                @default(false)
+  motifBlocage      String?                @map("motif_blocage")
+  createdAt         DateTime               @default(now()) @map("created_at")
+  updatedAt         DateTime               @updatedAt @map("updated_at")
+  deletedAt         DateTime?              @map("deleted_at")
+
+  agent             Agent?
+  documents         DocumentVerification[] @relation("DocumentUtilisateur")
+  documentsVerifies DocumentVerification[] @relation("VerificateurDocument")
+  biensBailleur     Bien[]                 @relation("BienBailleur")
+  biensCrees        Bien[]                 @relation("BienCreateur")
+  biensVerifies     Bien[]                 @relation("BienVerificateur")
+  favoris           Favori[]
+  alertes           AlerteRecherche[]
+  visitesLocataire  Visite[]               @relation("VisiteLocataire")
+  garants           Garant[]
+  candidatures      Candidature[]          @relation("CandidatureLocataire")
+  bauxBailleur      Bail[]                 @relation("BailBailleur")
+  bauxLocataire     Bail[]                 @relation("BailLocataire")
+  paiementsPayeur   Paiement[]             @relation("PaiementPayeur")
+  paiementsBenef    Paiement[]             @relation("PaiementBeneficiaire")
+  avisAuteur        Avis[]                 @relation("AvisAuteur")
+  avisCible         Avis[]                 @relation("AvisCible")
+  signalements      Signalement[]          @relation("SignalementAuteur")
+  signalementsTraites Signalement[]        @relation("SignalementTraiteur")
+  litigesOuverts    Litige[]               @relation("LitigeOuvreur")
+  litigesAssignes   Litige[]               @relation("LitigeAssignee")
+  participantsConversations ParticipantConversation[]
+  messagesExpedies  Message[]              @relation("MessageExpediteur")
+  notifications     Notification[]
+  auditsActeur      JournalAudit[]
+
+  @@map("utilisateur")
+}
+
+model DocumentVerification {
+  id            String      @id @default(uuid()) @db.Uuid
+  utilisateurId String      @map("utilisateur_id") @db.Uuid
+  utilisateur   Utilisateur @relation("DocumentUtilisateur", fields: [utilisateurId], references: [id], onDelete: Cascade)
+  type          String
+  storageKey    String      @map("storage_key")
+  hashSha256    String      @map("hash_sha256")
+  statut        StatutKyc   @default(EN_ATTENTE)
+  motifRejet    String?     @map("motif_rejet")
+  verifieParId  String?     @map("verifie_par") @db.Uuid
+  verifiePar    Utilisateur? @relation("VerificateurDocument", fields: [verifieParId], references: [id])
+  verifieLe     DateTime?   @map("verifie_le")
+  purgeLe       DateTime?   @map("purge_le") @db.Date
+  createdAt     DateTime    @default(now()) @map("created_at")
+
+  garants       Garant[]
+
+  @@map("document_verification")
+}
+
+model Agent {
+  id                String      @id @default(uuid()) @db.Uuid
+  utilisateurId    String      @unique @map("utilisateur_id") @db.Uuid
+  utilisateur      Utilisateur @relation(fields: [utilisateurId], references: [id], onDelete: Cascade)
+  codeAgent        String      @unique @map("code_agent")
+  villeId          String      @map("ville_id") @db.Uuid
+  ville            Ville       @relation(fields: [villeId], references: [id])
+  quartiersCouverts String[]   @default([]) @map("quartiers_couverts")
+  numeroMomo       String      @map("numero_momo")
+  cautionDeposee   BigInt      @default(0) @map("caution_deposee")
+  score            Float       @default(50.0)
+  nbVisites        Int         @default(0) @map("nb_visites")
+  nbVisitesOk      Int         @default(0) @map("nb_visites_ok")
+  nbBaux           Int         @default(0) @map("nb_baux")
+  suspendu         Boolean     @default(false)
+  charteSigneeLe   DateTime?   @map("charte_signee_le")
+  createdAt        DateTime    @default(now()) @map("created_at")
+
+  mandats          Mandat[]
+  visites          Visite[]
+  baux             Bail[]
+  retraits         RetraitAgent[]
+
+  @@map("agent")
+}
+
+// =========================================================
+// BIENS, MANDATS & ANNONCES
+// =========================================================
+model Bien {
+  id                  String        @id @default(uuid()) @db.Uuid
+  reference           String        @unique
+  bailleurId          String?       @map("bailleur_id") @db.Uuid
+  bailleur            Utilisateur?  @relation("BienBailleur", fields: [bailleurId], references: [id])
+  bailleurTel         String?       @map("bailleur_tel")
+  creeParId           String        @map("cree_par_id") @db.Uuid
+  creePar             Utilisateur   @relation("BienCreateur", fields: [creeParId], references: [id])
+  villeId             String        @map("ville_id") @db.Uuid
+  ville               Ville         @relation(fields: [villeId], references: [id])
+  quartierId          String        @map("quartier_id") @db.Uuid
+  quartier            Quartier      @relation(fields: [quartierId], references: [id])
+  pointRepereId       String?       @map("point_repere_id") @db.Uuid
+  pointRepere         PointRepere?  @relation(fields: [pointRepereId], references: [id])
+  indicationAcces     String?       @map("indication_acces")
+  latitude            Float?
+  longitude           Float?
+  latitudeFloue       Float?        @map("latitude_floue")
+  longitudeFloue      Float?        @map("longitude_floue")
+  type                TypeBien
+  nbPieces            Int?          @map("nb_pieces")
+  nbChambres          Int?          @map("nb_chambres")
+  nbDouches           Int?          @map("nb_douches")
+  surfaceM2           Int?          @map("surface_m2")
+  meuble              Boolean       @default(false)
+  etage               Int?
+  equipements         String[]      @default([])
+  compteurElectricite String?       @map("compteur_electricite")
+  compteurEau         String?       @map("compteur_eau")
+  statut              StatutBien    @default(BROUILLON)
+  motifRejet          String?       @map("motif_rejet")
+  verifieParId        String?       @map("verifie_par_id") @db.Uuid
+  verifiePar          Utilisateur?  @relation("BienVerificateur", fields: [verifieParId], references: [id])
+  verifieLe           DateTime?     @map("verifie_le")
+  createdAt           DateTime      @default(now()) @map("created_at")
+  updatedAt           DateTime      @updatedAt @map("updated_at")
+  deletedAt           DateTime?     @map("deleted_at")
+
+  mandats             Mandat[]
+  annonces            Annonce[]
+  medias              Media[]
+  baux                Bail[]
+
+  @@index([villeId, quartierId, statut])
+  @@map("bien")
+}
+
+model Mandat {
+  id             String     @id @default(uuid()) @db.Uuid
+  bienId         String     @map("bien_id") @db.Uuid
+  bien           Bien       @relation(fields: [bienId], references: [id], onDelete: Cascade)
+  agentId        String?    @map("agent_id") @db.Uuid
+  agent          Agent?     @relation(fields: [agentId], references: [id])
+  type           TypeMandat @default(SIMPLE)
+  tauxCommission Float?     @map("taux_commission")
+  debut          DateTime   @default(now()) @db.Date
+  fin            DateTime?  @db.Date
+  actif          Boolean    @default(true)
+
+  @@map("mandat")
+}
+
+model Annonce {
+  id                String             @id @default(uuid()) @db.Uuid
+  bienId            String             @map("bien_id") @db.Uuid
+  bien              Bien               @relation(fields: [bienId], references: [id], onDelete: Cascade)
+  titre             String
+  description       String?
+  loyerMensuel      BigInt             @map("loyer_mensuel")
+  chargesMensuelles BigInt             @default(0) @map("charges_mensuelles")
+  chargesIncluses   Boolean            @default(false) @map("charges_incluses")
+  avanceMois        Int                @default(2) @map("avance_mois")
+  cautionMois       Int                @default(1) @map("caution_mois")
+  negociable        Boolean            @default(false)
+  disponibleLe      DateTime?          @map("disponible_le") @db.Date
+  publieeLe         DateTime?          @map("publiee_le")
+  expireLe          DateTime?          @map("expire_le")
+  confirmeeLe       DateTime?          @map("confirmee_le")
+  boostJusquA       DateTime?          @map("boost_jusqu_a")
+  nbVues            Int                @default(0) @map("nb_vues")
+  nbDemandesVisite  Int                @default(0) @map("nb_demandes_visite")
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
+
+  favoris           Favori[]
+  visites           Visite[]
+  candidatures      Candidature[]
+  paiements         Paiement[]
+  conversations     Conversation[]
+
+  @@index([loyerMensuel])
+  @@map("annonce")
+}
+
+model Media {
+  id           String   @id @default(uuid()) @db.Uuid
+  bienId       String   @map("bien_id") @db.Uuid
+  bien         Bien     @relation(fields: [bienId], references: [id], onDelete: Cascade)
+  storageKey   String   @map("storage_key")
+  ordre        Int      @default(0)
+  largeur      Int?
+  hauteur      Int?
+  tailleOctets Int?     @map("taille_octets")
+  phash        String?
+  piece        String?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([phash])
+  @@map("media")
+}
+
+model Favori {
+  utilisateurId String      @map("utilisateur_id") @db.Uuid
+  utilisateur   Utilisateur @relation(fields: [utilisateurId], references: [id], onDelete: Cascade)
+  annonceId     String      @map("annonce_id") @db.Uuid
+  annonce       Annonce     @relation(fields: [annonceId], references: [id], onDelete: Cascade)
+  createdAt     DateTime    @default(now()) @map("created_at")
+
+  @@id([utilisateurId, annonceId])
+  @@map("favori")
+}
+
+model AlerteRecherche {
+  id            String      @id @default(uuid()) @db.Uuid
+  utilisateurId String      @map("utilisateur_id") @db.Uuid
+  utilisateur   Utilisateur @relation(fields: [utilisateurId], references: [id], onDelete: Cascade)
+  criteres      Json
+  canal         String      @default("PUSH")
+  actif         Boolean     @default(true)
+  derniereNotif DateTime?   @map("derniere_notif")
+
+  @@map("alerte_recherche")
+}
+
+// =========================================================
+// VISITES
+// =========================================================
+model Visite {
+  id                 String        @id @default(uuid()) @db.Uuid
+  annonceId          String        @map("annonce_id") @db.Uuid
+  annonce            Annonce       @relation(fields: [annonceId], references: [id])
+  locataireId        String        @map("locataire_id") @db.Uuid
+  locataire          Utilisateur   @relation("VisiteLocataire", fields: [locataireId], references: [id])
+  agentId            String?       @map("agent_id") @db.Uuid
+  agent              Agent?        @relation(fields: [agentId], references: [id])
+  statut             StatutVisite  @default(DEMANDEE)
+  creneauDebut       DateTime?     @map("creneau_debut")
+  creneauFin         DateTime?     @map("creneau_fin")
+  frais              BigInt
+  paiementId         String?       @map("paiement_id") @db.Uuid
+  codeConfirmation   String?       @map("code_confirmation")
+  checkinLatitude    Float?        @map("checkin_latitude")
+  checkinLongitude   Float?        @map("checkin_longitude")
+  checkinLe          DateTime?     @map("checkin_le")
+  confirmeeLe        DateTime?     @map("confirmee_le")
+  motifContestation  String?       @map("motif_contestation")
+  rembourseLe        DateTime?     @map("rembourse_le")
+  createdAt          DateTime      @default(now()) @map("created_at")
+
+  candidatures       Candidature[]
+  paiements          Paiement[]
+  avis               Avis[]
+  litiges            Litige[]
+
+  @@index([agentId, statut])
+  @@index([locataireId, createdAt])
+  @@map("visite")
+}
+
+// =========================================================
+// CANDIDATURE & BAIL
+// =========================================================
+model Garant {
+  id             String                @id @default(uuid()) @db.Uuid
+  locataireId    String                @map("locataire_id") @db.Uuid
+  locataire      Utilisateur           @relation(fields: [locataireId], references: [id], onDelete: Cascade)
+  nomComplet     String                @map("nom_complet")
+  telephone      String
+  profession     String?
+  lien           String?
+  cniDocumentId  String?               @map("cni_document_id") @db.Uuid
+  cniDocument    DocumentVerification? @relation(fields: [cniDocumentId], references: [id])
+  verifie        Boolean               @default(false)
+
+  candidatures   Candidature[]
+
+  @@map("garant")
+}
+
+model Candidature {
+  id            String            @id @default(uuid()) @db.Uuid
+  annonceId     String            @map("annonce_id") @db.Uuid
+  annonce       Annonce           @relation(fields: [annonceId], references: [id])
+  locataireId   String            @map("locataire_id") @db.Uuid
+  locataire     Utilisateur       @relation("CandidatureLocataire", fields: [locataireId], references: [id])
+  visiteId      String?           @map("visite_id") @db.Uuid
+  visite        Visite?           @relation(fields: [visiteId], references: [id])
+  statut        StatutCandidature @default(BROUILLON)
+  revenuDeclare BigInt?           @map("revenu_declare")
+  sourceRevenu  String?           @map("source_revenu")
+  garantId      String?           @map("garant_id") @db.Uuid
+  garant        Garant?           @relation(fields: [garantId], references: [id])
+  nbOccupants   Int?              @map("nb_occupants")
+  message       String?
+  motifRefus    String?           @map("motif_refus")
+  soumiseLe     DateTime?         @map("soumise_le")
+  decideeLe     DateTime?         @map("decidee_le")
+
+  baux          Bail[]
+
+  @@unique([annonceId, locataireId])
+  @@map("candidature")
+}
+
+model Bail {
+  id                  String        @id @default(uuid()) @db.Uuid
+  reference           String        @unique
+  bienId              String        @map("bien_id") @db.Uuid
+  bien                Bien          @relation(fields: [bienId], references: [id])
+  bailleurId          String        @map("bailleur_id") @db.Uuid
+  bailleur            Utilisateur   @relation("BailBailleur", fields: [bailleurId], references: [id])
+  locataireId         String        @map("locataire_id") @db.Uuid
+  locataire           Utilisateur   @relation("BailLocataire", fields: [locataireId], references: [id])
+  agentId             String?       @map("agent_id") @db.Uuid
+  agent               Agent?        @relation(fields: [agentId], references: [id])
+  candidatureId       String?       @map("candidature_id") @db.Uuid
+  candidature         Candidature?  @relation(fields: [candidatureId], references: [id])
+  statut              StatutBail    @default(PROJET)
+  dateDebut           DateTime      @map("date_debut") @db.Date
+  dateFin             DateTime?     @map("date_fin") @db.Date
+  dureeMois           Int?          @map("duree_mois")
+  loyerMensuel        BigInt        @map("loyer_mensuel")
+  chargesMensuelles   BigInt        @default(0) @map("charges_mensuelles")
+  jourEcheance        Int           @default(5) @map("jour_echeance")
+  avanceMois          Int           @default(2) @map("avance_mois")
+  avanceMontant       BigInt        @default(0) @map("avance_montant")
+  cautionMontant      BigInt        @default(0) @map("caution_montant")
+  cautionDetenuePar   String        @default("BAILLEUR") @map("caution_detenue_par")
+  precompteApplicable Boolean       @default(true) @map("precompte_applicable")
+  tauxPrecompte       Float         @default(10.00) @map("taux_precompte")
+  pdfStorageKey       String?       @map("pdf_storage_key")
+  pdfSigneKey         String?       @map("pdf_signe_key")
+  signeLe             DateTime?     @map("signe_le")
+  createdAt           DateTime      @default(now()) @map("created_at")
+
+  echeances           EcheanceLoyer[]
+  paiements           Paiement[]
+  etatsLieux          EtatLieux[]
+  avis                Avis[]
+  litiges             Litige[]
+  conversations       Conversation[]
+
+  @@map("bail")
+}
+
+model EcheanceLoyer {
+  id           String    @id @default(uuid()) @db.Uuid
+  bailId       String    @map("bail_id") @db.Uuid
+  bail         Bail      @relation(fields: [bailId], references: [id], onDelete: Cascade)
+  periode      DateTime  @db.Date
+  montantDu    BigInt    @map("montant_du")
+  montantPaye  BigInt    @default(0) @map("montant_paye")
+  dateLimite   DateTime  @map("date_limite") @db.Date
+  quittanceKey String?   @map("quittance_key")
+
+  paiements    Paiement[]
+
+  @@unique([bailId, periode])
+  @@map("echeance_loyer")
+}
+
+// =========================================================
+// PAIEMENTS & COMPTABILITE
+// =========================================================
+model Paiement {
+  id              String           @id @default(uuid()) @db.Uuid
+  reference       String           @unique
+  payeurId        String?          @map("payeur_id") @db.Uuid
+  payeur          Utilisateur?     @relation("PaiementPayeur", fields: [payeurId], references: [id])
+  beneficiaireId  String?          @map("beneficiaire_id") @db.Uuid
+  beneficiaire    Utilisateur?     @relation("PaiementBeneficiaire", fields: [beneficiaireId], references: [id])
+  type            TypePaiement
+  statut          StatutPaiement   @default(INITIE)
+  methode         MethodePaiement?
+  montant         BigInt
+  fraisPsp        BigInt           @default(0) @map("frais_psp")
+  devise          String           @default("XAF") @db.Char(3)
+  visiteId        String?          @map("visite_id") @db.Uuid
+  visite          Visite?          @relation(fields: [visiteId], references: [id])
+  bailId          String?          @map("bail_id") @db.Uuid
+  bail            Bail?            @relation(fields: [bailId], references: [id])
+  echeanceId      String?          @map("echeance_id") @db.Uuid
+  echeance        EcheanceLoyer?   @relation(fields: [echeanceId], references: [id])
+  annonceId       String?          @map("annonce_id") @db.Uuid
+  annonce         Annonce?         @relation(fields: [annonceId], references: [id])
+  idempotencyKey  String           @unique @map("idempotency_key")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  regleLe         DateTime?        @map("regle_le")
+
+  transactionsPsp TransactionPsp[]
+  ecritures       Ecriture[]
+  retraitsAgent   RetraitAgent[]
+
+  @@map("paiement")
+}
+
+model TransactionPsp {
+  id            String    @id @default(uuid()) @db.Uuid
+  paiementId    String    @map("paiement_id") @db.Uuid
+  paiement      Paiement  @relation(fields: [paiementId], references: [id], onDelete: Cascade)
+  psp           String
+  pspReference  String?   @map("psp_reference")
+  operateur     String?
+  numero        String?
+  requete       Json?
+  reponse       Json?
+  webhookRecuLe DateTime? @map("webhook_recu_le")
+  statutBrut    String?   @map("statut_brut")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  @@unique([psp, pspReference])
+  @@map("transaction_psp")
+}
+
+model Ecriture {
+  id         BigInt    @id @default(autoincrement())
+  paiementId String?   @map("paiement_id") @db.Uuid
+  paiement   Paiement? @relation(fields: [paiementId], references: [id])
+  compte     String
+  sens       String    @db.Char(1)
+  montant    BigInt
+  libelle    String?
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  @@index([compte, createdAt])
+  @@map("ecriture")
+}
+
+model RetraitAgent {
+  id         String         @id @default(uuid()) @db.Uuid
+  agentId    String         @map("agent_id") @db.Uuid
+  agent      Agent          @relation(fields: [agentId], references: [id])
+  montant    BigInt
+  numeroMomo String         @map("numero_momo")
+  statut     StatutPaiement @default(INITIE)
+  paiementId String?        @map("paiement_id") @db.Uuid
+  paiement   Paiement?      @relation(fields: [paiementId], references: [id])
+  createdAt  DateTime       @default(now()) @map("created_at")
+
+  @@map("retrait_agent")
+}
+
+// =========================================================
+// ETATS DES LIEUX, AVIS & LITIGES
+// =========================================================
+model EtatLieux {
+  id             String          @id @default(uuid()) @db.Uuid
+  bailId         String          @map("bail_id") @db.Uuid
+  bail           Bail            @relation(fields: [bailId], references: [id], onDelete: Cascade)
+  type           TypeEtatLieux
+  realiseLe      DateTime?       @map("realise_le")
+  signeBailleur  Boolean         @default(false) @map("signe_bailleur")
+  signeLocataire Boolean         @default(false) @map("signe_locataire")
+  pdfKey         String?         @map("pdf_key")
+
+  items          EtatLieuxItem[]
+
+  @@map("etat_lieux")
+}
+
+model EtatLieuxItem {
+  id          String    @id @default(uuid()) @db.Uuid
+  etatLieuxId String    @map("etat_lieux_id") @db.Uuid
+  etatLieux   EtatLieux @relation(fields: [etatLieuxId], references: [id], onDelete: Cascade)
+  piece       String
+  element     String
+  etat        String
+  commentaire String?
+  mediaKeys   String[]  @default([]) @map("media_keys")
+
+  @@map("etat_lieux_item")
+}
+
+model Avis {
+  id          String      @id @default(uuid()) @db.Uuid
+  auteurId    String      @map("auteur_id") @db.Uuid
+  auteur      Utilisateur @relation("AvisAuteur", fields: [auteurId], references: [id])
+  cibleId     String      @map("cible_id") @db.Uuid
+  cible       Utilisateur @relation("AvisCible", fields: [cibleId], references: [id])
+  bailId      String?     @map("bail_id") @db.Uuid
+  bail        Bail?       @relation(fields: [bailId], references: [id])
+  visiteId    String?     @map("visite_id") @db.Uuid
+  visite      Visite?     @relation(fields: [visiteId], references: [id])
+  note        Int
+  commentaire String?
+  publie      Boolean     @default(false)
+  createdAt   DateTime    @default(now()) @map("created_at")
+
+  @@map("avis")
+}
+
+model Signalement {
+  id          String       @id @default(uuid()) @db.Uuid
+  auteurId    String?      @map("auteur_id") @db.Uuid
+  auteur      Utilisateur? @relation("SignalementAuteur", fields: [auteurId], references: [id])
+  cibleType   String       @map("cible_type")
+  cibleId     String       @map("cible_id") @db.Uuid
+  motif       String
+  details     String?
+  traiteLe    DateTime?    @map("traite_le")
+  traiteParId String?      @map("traite_par") @db.Uuid
+  traitePar   Utilisateur? @relation("SignalementTraiteur", fields: [traiteParId], references: [id])
+  createdAt   DateTime     @default(now()) @map("created_at")
+
+  @@map("signalement")
+}
+
+model Litige {
+  id             String       @id @default(uuid()) @db.Uuid
+  bailId         String?      @map("bail_id") @db.Uuid
+  bail           Bail?        @relation(fields: [bailId], references: [id])
+  visiteId       String?      @map("visite_id") @db.Uuid
+  visite         Visite?      @relation(fields: [visiteId], references: [id])
+  ouvertParId    String       @map("ouvert_par_id") @db.Uuid
+  ouvertPar      Utilisateur  @relation("LitigeOuvreur", fields: [ouvertParId], references: [id])
+  categorie      String
+  statut         StatutLitige @default(OUVERT)
+  montantConteste BigInt?     @map("montant_conteste")
+  decision       String?
+  assigneAId     String?      @map("assigne_a") @db.Uuid
+  assigneA       Utilisateur? @relation("LitigeAssignee", fields: [assigneAId], references: [id])
+  createdAt      DateTime     @default(now()) @map("created_at")
+  closLe         DateTime?    @map("clos_le")
+
+  @@map("litige")
+}
+
+// =========================================================
+// COMMUNICATION & SYSTEME
+// =========================================================
+model Conversation {
+  id           String                    @id @default(uuid()) @db.Uuid
+  annonceId    String?                   @map("annonce_id") @db.Uuid
+  annonce      Annonce?                  @relation(fields: [annonceId], references: [id])
+  bailId       String?                   @map("bail_id") @db.Uuid
+  bail         Bail?                     @relation(fields: [bailId], references: [id])
+  createdAt    DateTime                  @default(now()) @map("created_at")
+
+  participants ParticipantConversation[]
+  messages     Message[]
+
+  @@map("conversation")
+}
+
+model ParticipantConversation {
+  conversationId String       @map("conversation_id") @db.Uuid
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  utilisateurId  String       @map("utilisateur_id") @db.Uuid
+  utilisateur    Utilisateur  @relation(fields: [utilisateurId], references: [id], onDelete: Cascade)
+  luJusquA       DateTime?    @map("lu_jusqu_a")
+
+  @@id([conversationId, utilisateurId])
+  @@map("participant_conversation")
+}
+
+model Message {
+  id             String       @id @default(uuid()) @db.Uuid
+  conversationId String       @map("conversation_id") @db.Uuid
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  expediteurId   String       @map("expediteur_id") @db.Uuid
+  expediteur     Utilisateur  @relation("MessageExpediteur", fields: [expediteurId], references: [id])
+  contenu        String
+  mediaKey       String?      @map("media_key")
+  masque         Boolean      @default(false)
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  @@map("message")
+}
+
+model Notification {
+  id            String      @id @default(uuid()) @db.Uuid
+  utilisateurId String      @map("utilisateur_id") @db.Uuid
+  utilisateur   Utilisateur @relation(fields: [utilisateurId], references: [id], onDelete: Cascade)
+  canal         String
+  gabarit       String
+  variables     Json        @default("{}")
+  envoyeLe      DateTime?   @map("envoye_le")
+  luLe          DateTime?   @map("lu_le")
+  erreur        String?
+
+  @@map("notification")
+}
+
+model Otp {
+  id         String    @id @default(uuid()) @db.Uuid
+  telephone  String
+  codeHash   String    @map("code_hash")
+  canal      String    @default("SMS")
+  tentatives Int       @default(0)
+  expireLe   DateTime  @map("expire_le")
+  consommeLe DateTime? @map("consomme_le")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  @@index([telephone, createdAt(sort: Desc)])
+  @@map("otp")
+}
+
+model JournalAudit {
+  id        BigInt       @id @default(autoincrement())
+  acteurId  String?      @map("acteur_id") @db.Uuid
+  acteur    Utilisateur? @relation(fields: [acteurId], references: [id])
+  action    String
+  entite    String
+  entiteId  String?      @map("entite_id") @db.Uuid
+  avant     Json?
+  apres     Json?
+  ip        String?
+  createdAt DateTime     @default(now()) @map("created_at")
+
+  @@map("journal_audit")
+}
+
+model ReferencePrix {
+  id          String   @id @default(uuid()) @db.Uuid
+  quartierId  String   @map("quartier_id") @db.Uuid
+  quartier    Quartier @relation(fields: [quartierId], references: [id])
+  type        TypeBien
+  nbPieces    Int?     @map("nb_pieces")
+  loyerP25    BigInt?  @map("loyer_p25")
+  loyerMedian BigInt?  @map("loyer_median")
+  loyerP75    BigInt?  @map("loyer_p75")
+  echantillon Int      @default(0)
+  calculeLe   DateTime @default(now()) @map("calcule_le")
+
+  @@unique([quartierId, type, nbPieces])
+  @@map("reference_prix")
+}
