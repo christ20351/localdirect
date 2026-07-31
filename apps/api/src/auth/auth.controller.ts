@@ -1,4 +1,5 @@
-import { Controller, Post, Body, Get, UseGuards, Patch } from '@nestjs/common';
+import { Controller, Post, Body, Get, UseGuards, Patch, Delete, ConflictException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { AuthService } from './auth.service';
 import { DemanderOtpDto } from './dtos/demander-otp.dto';
 import { VerifierOtpDto } from './dtos/verifier-otp.dto';
@@ -57,7 +58,7 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @Get('moi')
   async getProfil(@CurrentUser() user: any) {
-    return user;
+    return this.sansDonneesSensibles(user);
   }
 
   // ✏️ Mettre à jour les informations du profil utilisateur
@@ -67,10 +68,59 @@ export class AuthController {
     @CurrentUser() user: any,
     @Body() body: { nomComplet?: string; email?: string; langue?: 'FR' | 'EN'; villeId?: string; photoUrl?: string },
   ) {
+    try {
+      const updatedUser = await this.prisma.utilisateur.update({
+        where: { id: user.id },
+        data: body,
+      });
+      return this.sansDonneesSensibles(updatedUser);
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictException('Cet email est déjà utilisé par un autre compte.');
+      }
+      throw error;
+    }
+  }
+
+  // 🏠 Devenir Bailleur : ajoute le rôle BAILLEUR au compte (idempotent).
+  // Contrairement au rôle Agent, l'inscription bailleur ne nécessite pas de KYC
+  // au niveau du compte (voir README_1.md §6 "Bailleur") — la vérification se
+  // fait bien par bien, au moment de la publication d'une annonce.
+  @UseGuards(JwtAuthGuard)
+  @Post('devenir-bailleur')
+  async devenirBailleur(@CurrentUser() user: any) {
+    if (user.roles.includes('BAILLEUR')) {
+      return this.sansDonneesSensibles(user);
+    }
     const updatedUser = await this.prisma.utilisateur.update({
       where: { id: user.id },
-      data: body,
+      data: { roles: { push: 'BAILLEUR' } },
     });
-    return updatedUser;
+    return this.sansDonneesSensibles(updatedUser);
+  }
+
+  // 🗑️ Supprimer son compte (droit à l'effacement, loi n° 2024/017) — suppression
+  // logique : le compte est désactivé et les données identifiantes sont effacées,
+  // mais l'historique (visites, paiements, candidatures) est conservé pour l'audit.
+  @UseGuards(JwtAuthGuard)
+  @Delete('moi')
+  async supprimerCompte(@CurrentUser() user: any) {
+    await this.prisma.utilisateur.update({
+      where: { id: user.id },
+      data: {
+        deletedAt: new Date(),
+        bloque: true,
+        motifBlocage: 'Compte supprimé à la demande de l\'utilisateur',
+        nomComplet: null,
+        photoUrl: null,
+      },
+    });
+    return { message: 'Votre compte a été supprimé.' };
+  }
+
+  // Retire les champs sensibles (hash du mot de passe) avant de renvoyer un utilisateur au client.
+  private sansDonneesSensibles(utilisateur: any) {
+    const { motDePasseHash, ...safe } = utilisateur;
+    return safe;
   }
 }

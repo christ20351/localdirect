@@ -1,8 +1,11 @@
-import { Controller, Get, Post, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { AnnoncesService } from './annonces.service';
 import { FiltreAnnonceDto } from './dtos/filtre-annonce.dto';
 import { CreerBienDto } from './dtos/creer-bien.dto';
+import { ModifierBienDto } from './dtos/modifier-bien.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 @Controller('annonces')
@@ -20,6 +23,40 @@ export class AnnoncesController {
   async getAnnonceById(@Param('id') id: string) {
     return this.annoncesService.getAnnonceById(id);
   }
+
+  // ❤️ Route protégée : POST /api/v1/annonces/:id/favori
+  @UseGuards(JwtAuthGuard)
+  @Post(':id/favori')
+  async ajouterFavori(@CurrentUser() user: any, @Param('id') id: string) {
+    return this.annoncesService.ajouterFavori(user.id, id);
+  }
+
+  // 💔 Route protégée : DELETE /api/v1/annonces/:id/favori
+  @UseGuards(JwtAuthGuard)
+  @Delete(':id/favori')
+  async retirerFavori(@CurrentUser() user: any, @Param('id') id: string) {
+    return this.annoncesService.retirerFavori(user.id, id);
+  }
+}
+
+// 👤 Regroupe les routes liées à l'utilisateur connecté (préfixe /api/v1/moi)
+@Controller('moi')
+export class MoiController {
+  constructor(private annoncesService: AnnoncesService) {}
+
+  // 📋 Route protégée : GET /api/v1/moi/favoris
+  @UseGuards(JwtAuthGuard)
+  @Get('favoris')
+  async mesFavoris(@CurrentUser() user: any) {
+    return this.annoncesService.getMesFavoris(user.id);
+  }
+
+  // 🏘️ Route protégée : GET /api/v1/moi/biens (Espace Bailleur)
+  @UseGuards(JwtAuthGuard)
+  @Get('biens')
+  async mesBiens(@CurrentUser() user: any) {
+    return this.annoncesService.getMesBiens(user.id);
+  }
 }
 
 @Controller('biens')
@@ -31,5 +68,38 @@ export class BiensController {
   @Post()
   async creerBien(@CurrentUser() user: any, @Body() dto: CreerBienDto) {
     return this.annoncesService.creerBienEtAnnonce(user.id, dto);
+  }
+
+  // ✏️ Route protégée : PATCH /api/v1/biens/:id (Édition par le bailleur propriétaire)
+  @UseGuards(JwtAuthGuard)
+  @Patch(':id')
+  async modifierBien(@CurrentUser() user: any, @Param('id') id: string, @Body() dto: ModifierBienDto) {
+    return this.annoncesService.modifierBien(user.id, id, dto);
+  }
+
+  // ✅ Route protégée : POST /api/v1/biens/:id/marquer-loue
+  @UseGuards(JwtAuthGuard)
+  @Post(':id/marquer-loue')
+  async marquerLoue(@CurrentUser() user: any, @Param('id') id: string) {
+    return this.annoncesService.marquerBienLoue(user.id, id);
+  }
+}
+
+// 🛡️ Regroupe les routes de modération réservées au Staff/Admin (préfixe /api/v1/admin)
+@Controller('admin/biens')
+@UseGuards(JwtAuthGuard, RolesGuard)
+export class AdminBiensController {
+  constructor(private annoncesService: AnnoncesService) {}
+
+  @Roles('STAFF', 'ADMIN')
+  @Post(':id/valider')
+  async validerBien(@CurrentUser() user: any, @Param('id') id: string) {
+    return this.annoncesService.validerBien(user.id, id);
+  }
+
+  @Roles('STAFF', 'ADMIN')
+  @Post(':id/rejeter')
+  async rejeterBien(@CurrentUser() user: any, @Param('id') id: string, @Body('motif') motif: string) {
+    return this.annoncesService.rejeterBien(user.id, id, motif);
   }
 }

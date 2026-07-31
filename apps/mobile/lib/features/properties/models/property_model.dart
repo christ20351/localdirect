@@ -37,46 +37,59 @@ class PropertyModel {
     required this.publishedAt,
   });
 
+  /// L'API (`AnnoncesService.formatAnnonceResponse`) renvoie une forme imbriquée :
+  /// `{ id, titre, description, finances: {...}, bien: {...}, createdAt }`.
+  /// Ce parsing doit rester synchronisé avec cette forme exacte.
   factory PropertyModel.fromJson(Map<String, dynamic> json) {
+    final finances = json['finances'] as Map<String, dynamic>? ?? const {};
+    final bien = json['bien'] as Map<String, dynamic>? ?? const {};
+    final statut = bien['statut'] as String?;
+
     return PropertyModel(
       id: json['id'] as String,
-      reference: json['reference'] as String,
+      reference: bien['reference'] as String? ?? '',
       titre: json['titre'] as String,
       description: json['description'] as String? ?? '',
-      loyerMensuel: (json['loyer_mensuel'] as num).toInt(),
-      chargesMensuelles: (json['charges_mensuelles'] as num? ?? 0).toInt(),
-      chargesIncluses: json['charges_incluses'] as bool? ?? false,
-      avanceMois: json['avance_mois'] as int? ?? 2,
-      cautionMois: json['caution_mois'] as int? ?? 1,
-      typeBien: json['type'] as String? ?? 'STUDIO',
-      ville: json['ville'] as String? ?? 'Douala',
-      quartier: json['quartier'] as String? ?? 'Bonamoussadi',
-      pointRepere: json['point_repere'] as String? ?? 'Carrefour Kotto',
-      photos: (json['photos'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
-      isVerified: json['statut'] == 'DISPONIBLE',
-      isAvailable: json['is_available'] as bool? ?? true,
-      publishedAt: DateTime.parse(json['created_at'] as String? ?? DateTime.now().toIso8601String()),
+      loyerMensuel: (finances['loyerMensuelXAF'] as num? ?? 0).toInt(),
+      chargesMensuelles: (finances['chargesMensuellesXAF'] as num? ?? 0).toInt(),
+      chargesIncluses: finances['chargesIncluses'] as bool? ?? false,
+      avanceMois: finances['avanceMois'] as int? ?? 2,
+      cautionMois: finances['cautionMois'] as int? ?? 1,
+      typeBien: bien['type'] as String? ?? 'STUDIO',
+      ville: bien['ville'] as String? ?? '',
+      quartier: bien['quartier'] as String? ?? '',
+      pointRepere: bien['pointRepere'] as String? ?? '',
+      photos: (bien['photos'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
+      // Le catalogue public (`GET /annonces`) ne renvoie que des biens DISPONIBLE :
+      // en l'absence de statut explicite, on considère l'annonce vérifiée/disponible.
+      isVerified: statut == null || statut == 'DISPONIBLE',
+      isAvailable: statut == null || statut == 'DISPONIBLE',
+      publishedAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ?? DateTime.now(),
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
       'id': id,
-      'reference': reference,
       'titre': titre,
       'description': description,
-      'loyer_mensuel': loyerMensuel,
-      'charges_mensuelles': chargesMensuelles,
-      'charges_incluses': chargesIncluses,
-      'avance_mois': avanceMois,
-      'caution_mois': cautionMois,
-      'type': typeBien,
-      'ville': ville,
-      'quartier': quartier,
-      'point_repere': pointRepere,
-      'photos': photos,
-      'is_available': isAvailable,
-      'created_at': publishedAt.toIso8601String(),
+      'finances': {
+        'loyerMensuelXAF': loyerMensuel,
+        'chargesMensuellesXAF': chargesMensuelles,
+        'chargesIncluses': chargesIncluses,
+        'avanceMois': avanceMois,
+        'cautionMois': cautionMois,
+      },
+      'bien': {
+        'reference': reference,
+        'type': typeBien,
+        'ville': ville,
+        'quartier': quartier,
+        'pointRepere': pointRepere,
+        'photos': photos,
+        'statut': isAvailable ? 'DISPONIBLE' : 'LOUE',
+      },
+      'createdAt': publishedAt.toIso8601String(),
     };
   }
 }

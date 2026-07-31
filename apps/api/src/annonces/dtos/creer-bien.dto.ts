@@ -30,17 +30,29 @@ export class CreerBienDto {
   @IsEnum(TypeBien)
   type: TypeBien;
 
-  @IsNotEmpty()
+  @IsOptional()
   @IsString()
-  villeId: string;
+  villeId?: string;
 
-  @IsNotEmpty()
+  @IsOptional()
   @IsString()
-  quartierId: string;
+  quartierId?: string;
+
+  @IsOptional()
+  @IsString()
+  villeSlug?: string;
+
+  @IsOptional()
+  @IsString()
+  quartierNom?: string;
 
   @IsOptional()
   @IsString()
   pointRepereId?: string;
+
+  @IsOptional()
+  @IsString()
+  pointRepereNom?: string;
 
   @IsOptional()
   @IsString()

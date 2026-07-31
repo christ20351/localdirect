@@ -32,6 +32,10 @@ export class FiltreAnnonceDto {
 
   @IsOptional()
   @IsNumberString()
+  nbPieces?: string;
+
+  @IsOptional()
+  @IsNumberString()
   page?: string;
 
   @IsOptional()

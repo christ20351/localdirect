@@ -20,6 +20,12 @@ infra/data/
 *.db
 *.sqlite
 
+# Secrets
+
+.env.local
+.env.*.local
+apps/**/.env
+
 # IDE
 .idea/
 .vscode/
