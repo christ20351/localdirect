@@ -1,4 +1,4 @@
-import { IsEmail, IsNotEmpty, IsOptional, IsString, MinLength, Matches } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsOptional, IsString, IsBoolean, MinLength, Matches } from 'class-validator';
 
 export class InscriptionDto {
   @IsNotEmpty({ message: 'Le nom complet est obligatoire.' })
@@ -24,4 +24,10 @@ export class InscriptionDto {
   @IsOptional()
   @IsString()
   villeId?: string;
+
+  // Choisi à l'étape "intention" de l'inscription : ajoute le rôle BAILLEUR
+  // en plus de LOCATAIRE dès la création du compte.
+  @IsOptional()
+  @IsBoolean()
+  devenirBailleur?: boolean;
 }

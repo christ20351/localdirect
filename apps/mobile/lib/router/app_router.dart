@@ -2,12 +2,22 @@ import 'package:go_router/go_router.dart';
 import '../features/properties/presentation/property_list_screen.dart';
 import '../features/properties/presentation/property_detail_screen.dart';
 import '../features/auth/presentation/login_screen.dart';
-import '../features/auth/presentation/register_screen.dart';
-import '../features/auth/presentation/otp_verification_screen.dart';
+import '../features/auth/presentation/register_flow_screen.dart';
+import '../features/auth/presentation/splash_screen.dart';
+import '../features/auth/presentation/settings_screen.dart';
+import '../features/candidatures/presentation/candidatures_list_screen.dart';
+import '../features/alertes/presentation/alertes_list_screen.dart';
+import '../features/bailleur/presentation/bailleur_home_screen.dart';
+import '../features/bailleur/presentation/ajouter_bien_screen.dart';
+import '../features/bailleur/models/bien_model.dart';
 
 final appRouter = GoRouter(
-  initialLocation: '/',
+  initialLocation: '/splash',
   routes: [
+    GoRoute(
+      path: '/splash',
+      builder: (context, state) => const SplashScreen(),
+    ),
     GoRoute(
       path: '/',
       builder: (context, state) => const PropertyListScreen(),
@@ -20,22 +30,35 @@ final appRouter = GoRouter(
       },
     ),
     GoRoute(
+      path: '/bailleur',
+      builder: (context, state) => const BailleurHomeScreen(),
+    ),
+    GoRoute(
+      path: '/bailleur/ajouter-bien',
+      builder: (context, state) {
+        final bien = state.extra as BienModel?;
+        return AjouterBienScreen(bienToEdit: bien);
+      },
+    ),
+    GoRoute(
+      path: '/candidatures',
+      builder: (context, state) => const CandidaturesListScreen(),
+    ),
+    GoRoute(
+      path: '/settings',
+      builder: (context, state) => const SettingsScreen(),
+    ),
+    GoRoute(
+      path: '/alertes',
+      builder: (context, state) => const AlertesListScreen(),
+    ),
+    GoRoute(
       path: '/auth/login',
       builder: (context, state) => const LoginScreen(),
     ),
     GoRoute(
       path: '/auth/register',
-      builder: (context, state) => const RegisterScreen(),
-    ),
-    GoRoute(
-      path: '/auth/otp-verify',
-      builder: (context, state) {
-        final extra = state.extra as Map<String, dynamic>? ?? {};
-        return OtpVerificationScreen(
-          telephone: extra['telephone'] ?? '',
-          debugCode: extra['debugCode'],
-        );
-      },
+      builder: (context, state) => const RegisterFlowScreen(),
     ),
   ],
 );

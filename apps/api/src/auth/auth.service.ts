@@ -120,10 +120,18 @@ export class AuthService {
 
   /// 🌐 Connexion / Inscription via Google Sign-In (OAuth2)
   async connexionGoogle(dto: GoogleLoginDto) {
+    const googleClientId = this.configService.get<string>('GOOGLE_CLIENT_ID');
+    if (!googleClientId) {
+      throw new UnauthorizedException('Connexion Google non configurée côté serveur (GOOGLE_CLIENT_ID manquant).');
+    }
+
     try {
-      // 1. Vérification du jeton idToken auprès des serveurs officiels de Google
+      // 1. Vérification du jeton idToken auprès des serveurs officiels de Google,
+      // en exigeant explicitement que l'audience corresponde à notre Web Client ID
+      // (c'est cette même audience que le mobile demande via `serverClientId`).
       const ticket = await this.googleOAuthClient.verifyIdToken({
         idToken: dto.idToken,
+        audience: googleClientId,
       });
 
       const payload = ticket.getPayload();
@@ -166,7 +174,7 @@ export class AuthService {
 
   /// 📧 Inscription complète par Email + Mot de passe + Téléphone
   async inscription(dto: InscriptionDto) {
-    const { nomComplet, email, telephone, motDePasse, villeId } = dto;
+    const { nomComplet, email, telephone, motDePasse, villeId, devenirBailleur } = dto;
 
     const existingUser = await this.prisma.utilisateur.findFirst({
       where: {
@@ -187,7 +195,7 @@ export class AuthService {
         telephone,
         motDePasseHash,
         villeId,
-        roles: ['LOCATAIRE'],
+        roles: devenirBailleur ? ['LOCATAIRE', 'BAILLEUR'] : ['LOCATAIRE'],
       },
     });
 

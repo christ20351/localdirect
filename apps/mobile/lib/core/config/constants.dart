@@ -1,6 +1,15 @@
 class AppConstants {
   static const String appName = 'LocaDirect CM';
-  static const String apiBaseUrl = 'http://10.0.2.2:3000/api/v1';
+
+  /// URL de base de l'API. `localhost` fonctionne dans tous les cas d'usage
+  /// actuels du projet :
+  /// - Desktop (Linux/macOS/Windows), iOS Simulator, Web : direct, l'app tourne
+  ///   sur la même machine que l'API.
+  /// - Android (émulateur OU appareil physique en USB) : nécessite un tunnel
+  ///   `adb reverse tcp:3000 tcp:3000` (à relancer à chaque connexion USB) —
+  ///   plus fiable que l'alias `10.0.2.2` qui ne marche que sur l'émulateur
+  ///   par défaut d'Android Studio, pas sur un appareil physique.
+  static const String apiBaseUrl = 'http://localhost:3000/api/v1';
 
   // Specifics Cameroon
   static const String currencySymbol = 'FCFA';
@@ -10,4 +19,13 @@ class AppConstants {
 
   // Key Cities
   static const List<String> supportedCities = ['Douala', 'Yaoundé'];
+
+  /// Web Client ID Google OAuth (type "Application Web" dans Google Cloud Console).
+  /// Nécessaire même sur Android : c'est l'audience contre laquelle le backend
+  /// vérifie l'idToken (`serverClientId` passé à GoogleSignIn). Le client Android
+  /// (package + SHA-1) est enregistré séparément côté Google et détecté
+  /// automatiquement par le plugin — il n'a pas besoin d'être codé ici.
+  static const String googleWebClientId = '';
+
+  static bool get isGoogleSignInConfigured => googleWebClientId.isNotEmpty;
 }

@@ -8,53 +8,132 @@ enum VisitStatus {
   contestee,
   annulee,
   remboursee,
+  noShow,
+  inconnue;
+
+  static VisitStatus fromApi(String value) {
+    switch (value) {
+      case 'DEMANDEE':
+        return VisitStatus.demandee;
+      case 'PAYEE':
+        return VisitStatus.payee;
+      case 'PLANIFIEE':
+        return VisitStatus.planifiee;
+      case 'CHECK_IN':
+        return VisitStatus.checkIn;
+      case 'REALISEE':
+        return VisitStatus.realisee;
+      case 'CONFIRMEE':
+        return VisitStatus.confirmee;
+      case 'CONTESTEE':
+        return VisitStatus.contestee;
+      case 'ANNULEE':
+        return VisitStatus.annulee;
+      case 'REMBOURSEE':
+        return VisitStatus.remboursee;
+      case 'NO_SHOW':
+        return VisitStatus.noShow;
+      default:
+        return VisitStatus.inconnue;
+    }
+  }
 }
 
 extension VisitStatusX on VisitStatus {
-  String get label {
+  /// Clé de traduction — résolue au point d'affichage via `context.tr(status.labelKey)`
+  /// (un modèle Dart n'a pas accès au `BuildContext` pour traduire lui-même).
+  String get labelKey {
     switch (this) {
       case VisitStatus.demandee:
-        return 'En attente de paiement MoMo';
+        return 'visit_status_demandee';
       case VisitStatus.payee:
-        return 'Visite Payée & Garantie';
+        return 'visit_status_payee';
       case VisitStatus.planifiee:
-        return 'Créneau Confirmé avec l\'Agent';
+        return 'visit_status_planifiee';
       case VisitStatus.checkIn:
-        return 'Agent Présent sur le Terrain (GPS)';
+        return 'visit_status_checkin';
       case VisitStatus.realisee:
-        return 'Visite Effectuée';
+        return 'visit_status_realisee';
       case VisitStatus.confirmee:
-        return 'Visite Confirmée par le Locataire';
+        return 'visit_status_confirmee';
       case VisitStatus.contestee:
-        return 'Contestée (Litige)';
+        return 'visit_status_contestee';
       case VisitStatus.annulee:
-        return 'Annulée';
+        return 'visit_status_annulee';
       case VisitStatus.remboursee:
-        return 'Frais Remboursés via MoMo';
+        return 'visit_status_remboursee';
+      case VisitStatus.noShow:
+        return 'visit_status_noshow';
+      case VisitStatus.inconnue:
+        return 'visit_status_inconnue';
     }
+  }
+
+  /// `true` si le locataire peut encore confirmer/contester cette visite.
+  bool get peutEtreClotureeParLocataire =>
+      this == VisitStatus.payee || this == VisitStatus.planifiee || this == VisitStatus.checkIn || this == VisitStatus.realisee;
+}
+
+class VisitAnnonceSummary {
+  final String id;
+  final String titre;
+  final String? ville;
+  final String? quartier;
+  final String? photo;
+
+  const VisitAnnonceSummary({required this.id, required this.titre, this.ville, this.quartier, this.photo});
+
+  factory VisitAnnonceSummary.fromJson(Map<String, dynamic> json) {
+    return VisitAnnonceSummary(
+      id: json['id'] as String,
+      titre: json['titre'] as String? ?? '',
+      ville: json['ville'] as String?,
+      quartier: json['quartier'] as String?,
+      photo: json['photo'] as String?,
+    );
   }
 }
 
 class VisitModel {
   final String id;
-  final String propertyId;
-  final String tenantId;
-  final String? agentId;
+  final String annonceId;
   final VisitStatus status;
   final int feeAmountXAF;
-  final String? confirmationCode; // Code 4 chiffres
+  final String? confirmationCode;
+  final String? motifContestation;
   final DateTime? scheduledTime;
+  final DateTime? confirmeeLe;
+  final DateTime? rembourseLe;
   final DateTime createdAt;
+  final VisitAnnonceSummary? annonce;
 
-  VisitModel({
+  const VisitModel({
     required this.id,
-    required this.propertyId,
-    required this.tenantId,
-    this.agentId,
+    required this.annonceId,
     required this.status,
     required this.feeAmountXAF,
     this.confirmationCode,
+    this.motifContestation,
     this.scheduledTime,
+    this.confirmeeLe,
+    this.rembourseLe,
     required this.createdAt,
+    this.annonce,
   });
+
+  factory VisitModel.fromJson(Map<String, dynamic> json) {
+    return VisitModel(
+      id: json['id'] as String,
+      annonceId: json['annonceId'] as String,
+      status: VisitStatus.fromApi(json['statut'] as String? ?? ''),
+      feeAmountXAF: (json['fraisXAF'] as num?)?.toInt() ?? 0,
+      confirmationCode: json['codeConfirmation'] as String?,
+      motifContestation: json['motifContestation'] as String?,
+      scheduledTime: json['creneauDebut'] != null ? DateTime.tryParse(json['creneauDebut'] as String) : null,
+      confirmeeLe: json['confirmeeLe'] != null ? DateTime.tryParse(json['confirmeeLe'] as String) : null,
+      rembourseLe: json['rembourseLe'] != null ? DateTime.tryParse(json['rembourseLe'] as String) : null,
+      createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ?? DateTime.now(),
+      annonce: json['annonce'] != null ? VisitAnnonceSummary.fromJson(json['annonce'] as Map<String, dynamic>) : null,
+    );
+  }
 }
