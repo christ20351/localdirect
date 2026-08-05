@@ -2,9 +2,10 @@ import Link from "next/link";
 import type { Annonce } from "@/lib/types";
 import { formatXAF, typeLabel } from "@/lib/format";
 import { isDisplayablePhoto } from "@/lib/api";
+import PhotoCarousel from "./PhotoCarousel";
 
 export default function AnnonceCard({ annonce }: { annonce: Annonce }) {
-  const photo = annonce.bien.photos.find(isDisplayablePhoto);
+  const photos = annonce.bien.photos.filter(isDisplayablePhoto);
   const localisation = [annonce.bien.quartier, annonce.bien.ville]
     .filter(Boolean)
     .join(", ");
@@ -14,22 +15,10 @@ export default function AnnonceCard({ annonce }: { annonce: Annonce }) {
       href={`/annonces/${annonce.id}`}
       className="group flex flex-col overflow-hidden rounded-xl border border-brand-border bg-white transition-shadow hover:shadow-md"
     >
-      <div className="relative aspect-[4/3] w-full bg-brand-surface">
-        {photo ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={photo}
-            alt={annonce.titre}
-            loading="lazy"
-            className="h-full w-full object-cover"
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-sm text-brand-muted">
-            Photo à venir
-          </div>
-        )}
+      <div className="relative">
+        <PhotoCarousel photos={photos} alt={annonce.titre} aspect="aspect-[4/3]" />
         {annonce.bien.meuble && (
-          <span className="absolute left-2 top-2 rounded-full bg-white/90 px-2 py-0.5 text-xs font-medium text-brand-primary shadow-sm">
+          <span className="pointer-events-none absolute left-2 top-2 rounded-full bg-white/90 px-2 py-0.5 text-xs font-medium text-brand-primary shadow-sm">
             Meublé
           </span>
         )}
