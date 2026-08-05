@@ -1,8 +1,10 @@
-import { Controller, Get, Post, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { CandidaturesService } from './candidatures.service';
 import { CreerCandidatureDto } from './dtos/creer-candidature.dto';
 import { DeciderCandidatureDto } from './dtos/decider-candidature.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 @Controller('annonces/:annonceId/candidatures')
@@ -61,5 +63,18 @@ export class BailleurCandidaturesController {
   @Get()
   async candidaturesRecues(@CurrentUser() user: any) {
     return this.candidaturesService.getCandidaturesBailleur(user.id);
+  }
+}
+
+// 🛡️ GET /api/v1/admin/candidatures — vue d'ensemble plateforme, lecture seule (Staff/Admin)
+@Controller('admin/candidatures')
+@UseGuards(JwtAuthGuard, RolesGuard)
+export class AdminCandidaturesController {
+  constructor(private candidaturesService: CandidaturesService) {}
+
+  @Roles('STAFF', 'ADMIN')
+  @Get()
+  async toutesLesCandidatures(@Query('statut') statut?: string) {
+    return this.candidaturesService.getToutesLesCandidatures(statut);
   }
 }

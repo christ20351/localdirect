@@ -1,9 +1,10 @@
-import { Controller, Get, Post, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { VisitesService } from './visites.service';
 import { CreerVisiteDto } from './dtos/creer-visite.dto';
-import { PayerVisiteDto } from './dtos/payer-visite.dto';
 import { ContesterVisiteDto } from './dtos/contester-visite.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 @Controller('annonces/:annonceId/visites')
@@ -25,13 +26,6 @@ export class AnnonceVisitesController {
 @Controller('visites')
 export class VisitesController {
   constructor(private visitesService: VisitesService) {}
-
-  // 💳 Route protégée : POST /api/v1/visites/:id/payer
-  @UseGuards(JwtAuthGuard)
-  @Post(':id/payer')
-  async payerVisite(@CurrentUser() user: any, @Param('id') id: string, @Body() dto: PayerVisiteDto) {
-    return this.visitesService.payerVisite(user.id, id, dto);
-  }
 
   // 🔍 Route protégée : GET /api/v1/visites/:id
   @UseGuards(JwtAuthGuard)
@@ -64,5 +58,18 @@ export class MoiVisitesController {
   @Get()
   async mesVisites(@CurrentUser() user: any) {
     return this.visitesService.getMesVisites(user.id);
+  }
+}
+
+// 🛡️ GET /api/v1/admin/visites — file des visites signalées non conformes (Staff/Admin)
+@Controller('admin/visites')
+@UseGuards(JwtAuthGuard, RolesGuard)
+export class AdminVisitesController {
+  constructor(private visitesService: VisitesService) {}
+
+  @Roles('STAFF', 'ADMIN')
+  @Get()
+  async fileLitiges(@Query('statut') statut?: string) {
+    return this.visitesService.getVisitesEnLitige(statut);
   }
 }

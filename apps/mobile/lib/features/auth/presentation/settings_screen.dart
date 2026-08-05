@@ -6,6 +6,9 @@ import '../../../core/theme/theme_provider.dart';
 import '../../../core/l10n/app_localizations.dart';
 import '../../../core/l10n/locale_provider.dart';
 import '../../properties/presentation/property_provider.dart';
+import '../../documents/models/document_model.dart';
+import '../../documents/presentation/document_upload_screen.dart';
+
 import 'auth_provider.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -83,35 +86,32 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
+  /// Tente d'accorder le rôle Bailleur : le serveur vérifie qu'au moins 2 des 4
+  /// documents de preuve de propriété ont été validés par le Staff. Si ce n'est
+  /// pas encore le cas, on ouvre directement l'écran de soumission des documents
+  /// plutôt que d'afficher une simple erreur.
   Future<void> _devenirBailleur() async {
     setState(() => _isSaving = true);
-    final success = await ref.read(authRepositoryProvider).devenirBailleur();
+    final result = await ref.read(authRepositoryProvider).devenirBailleur();
     setState(() => _isSaving = false);
     if (!mounted) return;
 
-    if (success) {
+    if (result['success'] == true) {
       ref.invalidate(currentUserProvider);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(context.tr('settings_become_landlord_success')), backgroundColor: AppColors.primary),
       );
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.tr('settings_become_landlord_error'))),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result['message'] ?? context.tr('settings_become_landlord_error'))));
+      Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => const DocumentUploadScreen(
+          typesRequis: TypesDocuments.preuvePropriete,
+          seuilRequis: TypesDocuments.seuilPreuvePropriete,
+          titreKey: 'bailleur_kyc_title',
+          sousTitreKey: 'bailleur_kyc_subtitle',
+        ),
+      ));
     }
-  }
-
-  void _showAgentBientotDisponible() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(context.tr('settings_become_agent')),
-        content: Text(context.tr('register_agent_dialog_body')),
-        actions: [
-          ElevatedButton(onPressed: () => Navigator.pop(ctx), child: Text(context.tr('common_understood'))),
-        ],
-      ),
-    );
   }
 
   Future<void> _confirmerSuppression() async {
@@ -286,38 +286,29 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   const SizedBox(height: AppSpacing.lg),
                   _section(context.tr('settings_section_locadirect_account')),
                   Card(
-                    child: Column(
-                      children: [
-                        if (!(user['roles'] as List).contains('BAILLEUR'))
-                          ListTile(
-                            leading: const Icon(Icons.villa_outlined, color: AppColors.primary),
-                            title: Text(context.tr('settings_become_landlord')),
-                            subtitle: Text(context.tr('settings_become_landlord_subtitle'), style: const TextStyle(fontSize: 11)),
-                            trailing: const Icon(Icons.chevron_right),
-                            onTap: _devenirBailleur,
-                          )
-                        else
-                          ListTile(
-                            leading: const Icon(Icons.villa, color: AppColors.primary),
-                            title: Text(context.tr('settings_landlord_active')),
-                            subtitle: Text(context.tr('settings_landlord_active_subtitle'), style: const TextStyle(fontSize: 11)),
-                          ),
-                        const Divider(height: 1),
-                        ListTile(
-                          leading: const Icon(Icons.badge_outlined, color: Colors.grey),
-                          title: Text(context.tr('settings_become_agent')),
-                          trailing: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: AppColors.accentGold.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(AppRadius.pill),
+                    child: Builder(builder: (context) {
+                      final roles = user['roles'] as List;
+                      final estBailleur = roles.contains('BAILLEUR');
+
+                      return Column(
+                        children: [
+                          if (estBailleur)
+                            ListTile(
+                              leading: const Icon(Icons.villa, color: AppColors.primary),
+                              title: Text(context.tr('settings_landlord_active')),
+                              subtitle: Text(context.tr('settings_landlord_active_subtitle'), style: const TextStyle(fontSize: 11)),
+                            )
+                          else
+                            ListTile(
+                              leading: const Icon(Icons.villa_outlined, color: AppColors.primary),
+                              title: Text(context.tr('settings_become_landlord')),
+                              subtitle: Text(context.tr('settings_become_landlord_subtitle'), style: const TextStyle(fontSize: 11)),
+                              trailing: const Icon(Icons.chevron_right),
+                              onTap: _devenirBailleur,
                             ),
-                            child: Text(context.tr('common_soon'), style: const TextStyle(fontSize: 10, color: AppColors.accentGold, fontWeight: FontWeight.bold)),
-                          ),
-                          onTap: _showAgentBientotDisponible,
-                        ),
-                      ],
-                    ),
+                        ],
+                      );
+                    }),
                   ),
 
                   const SizedBox(height: AppSpacing.lg),

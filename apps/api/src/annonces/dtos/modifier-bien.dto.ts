@@ -50,6 +50,14 @@ export class ModifierBienDto {
   meuble?: boolean;
 
   @IsOptional()
+  @IsString()
+  compteurElectricite?: string;
+
+  @IsOptional()
+  @IsString()
+  compteurEau?: string;
+
+  @IsOptional()
   @IsArray()
   @IsString({ each: true })
   equipements?: string[];
@@ -61,5 +69,9 @@ export class ModifierBienDto {
 
   @IsOptional()
   @IsString()
-  statut?: string;
+  bailleurTel?: string;
+
+  @IsOptional()
+  @IsString()
+  whatsapp?: string;
 }

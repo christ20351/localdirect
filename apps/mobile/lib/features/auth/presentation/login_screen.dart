@@ -1,19 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/config/constants.dart';
 import '../../../core/widgets/auth_scaffold.dart';
 import '../../../core/l10n/app_localizations.dart';
+import '../../../core/utils/session_reset.dart';
 import '../data/auth_repository.dart';
 
-class LoginScreen extends StatefulWidget {
+class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends ConsumerState<LoginScreen> {
   final AuthRepository _authRepository = AuthRepository();
 
   final _emailController = TextEditingController();
@@ -47,6 +49,8 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted) return;
 
     if (res['success'] == true) {
+      await invalidateSessionProviders(ref);
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(context.tr('login_success')),
@@ -77,6 +81,8 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted) return;
 
     if (res['success'] == true) {
+      await invalidateSessionProviders(ref);
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(context.tr('login_google_success')),

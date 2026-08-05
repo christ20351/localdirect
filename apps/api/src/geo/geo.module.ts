@@ -1,9 +1,11 @@
 import { Module } from '@nestjs/common';
 import { GeoService } from './geo.service';
-import { GeoController } from './geo.controller';
+import { GeoController, AdminGeoController } from './geo.controller';
+import { AuditModule } from '../audit/audit.module';
 
 @Module({
-  controllers: [GeoController],
+  imports: [AuditModule],
+  controllers: [GeoController, AdminGeoController],
   providers: [GeoService],
   exports: [GeoService],
 })

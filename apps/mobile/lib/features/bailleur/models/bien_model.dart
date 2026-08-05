@@ -64,6 +64,8 @@ class BienModel {
   final String? titre;
   final int? loyerMensuelXAF;
   final DateTime? createdAt;
+  final String? bailleurTel;
+  final String? bailleurWhatsapp;
 
   const BienModel({
     required this.id,
@@ -80,6 +82,8 @@ class BienModel {
     this.titre,
     this.loyerMensuelXAF,
     this.createdAt,
+    this.bailleurTel,
+    this.bailleurWhatsapp,
   });
 
   factory BienModel.fromJson(Map<String, dynamic> json) {
@@ -98,6 +102,8 @@ class BienModel {
       titre: json['titre'] as String?,
       loyerMensuelXAF: (json['loyerMensuelXAF'] as num?)?.toInt(),
       createdAt: json['createdAt'] != null ? DateTime.tryParse(json['createdAt'] as String) : null,
+      bailleurTel: json['bailleurTel'] as String?,
+      bailleurWhatsapp: json['bailleurWhatsapp'] as String?,
     );
   }
 }

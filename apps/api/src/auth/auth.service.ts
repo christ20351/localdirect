@@ -188,6 +188,10 @@ export class AuthService {
 
     const motDePasseHash = await bcrypt.hash(motDePasse, 10);
 
+    // Le rôle BAILLEUR n'est plus accordé à l'inscription : il nécessite la
+    // soumission et la validation Staff d'au moins 2 documents de preuve de
+    // propriété (voir AuthController.devenirBailleur). `devenirBailleur` ici
+    // n'exprime qu'une intention, relayée au mobile pour l'orienter vers cet écran.
     const utilisateur = await this.prisma.utilisateur.create({
       data: {
         nomComplet,
@@ -195,11 +199,12 @@ export class AuthService {
         telephone,
         motDePasseHash,
         villeId,
-        roles: devenirBailleur ? ['LOCATAIRE', 'BAILLEUR'] : ['LOCATAIRE'],
+        roles: ['LOCATAIRE'],
       },
     });
 
-    return this.generateTokens(utilisateur);
+    const tokens = await this.generateTokens(utilisateur);
+    return { ...tokens, intentionBailleur: !!devenirBailleur };
   }
 
   /// 🔑 Connexion par Email/Téléphone + Mot de passe

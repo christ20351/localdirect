@@ -1,4 +1,6 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, UseInterceptors, UploadedFiles, Req } from '@nestjs/common';
+import { FilesInterceptor } from '@nestjs/platform-express';
+import type { Request } from 'express';
 import { AnnoncesService } from './annonces.service';
 import { FiltreAnnonceDto } from './dtos/filtre-annonce.dto';
 import { CreerBienDto } from './dtos/creer-bien.dto';
@@ -7,6 +9,9 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { multerStorage, MEDIAS_DIR } from '../uploads/storage.util';
+
+const MAX_TAILLE_PHOTO = 6 * 1024 * 1024; // 6 Mo
 
 @Controller('annonces')
 export class AnnoncesController {
@@ -63,8 +68,10 @@ export class MoiController {
 export class BiensController {
   constructor(private annoncesService: AnnoncesService) {}
 
-  // ➕ Route protégée : POST /api/v1/biens (Création de bien par Agent ou Bailleur)
-  @UseGuards(JwtAuthGuard)
+  // ➕ Route protégée : POST /api/v1/biens (Création de bien réservée au Bailleur —
+  // un simple Locataire n'ayant pas franchi la vérification KYC ne peut pas publier de bien).
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('BAILLEUR')
   @Post()
   async creerBien(@CurrentUser() user: any, @Body() dto: CreerBienDto) {
     return this.annoncesService.creerBienEtAnnonce(user.id, dto);
@@ -83,6 +90,20 @@ export class BiensController {
   async marquerLoue(@CurrentUser() user: any, @Param('id') id: string) {
     return this.annoncesService.marquerBienLoue(user.id, id);
   }
+
+  // 📸 Route protégée : POST /api/v1/biens/:id/medias (upload réel de photos, jusqu'à 6 à la fois)
+  @UseGuards(JwtAuthGuard)
+  @Post(':id/medias')
+  @UseInterceptors(FilesInterceptor('photos', 6, { storage: multerStorage(MEDIAS_DIR), limits: { fileSize: MAX_TAILLE_PHOTO } }))
+  async ajouterMedias(
+    @CurrentUser() user: any,
+    @Param('id') id: string,
+    @UploadedFiles() files: Express.Multer.File[],
+    @Req() req: Request,
+  ) {
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    return this.annoncesService.ajouterMedias(user.id, id, files, baseUrl);
+  }
 }
 
 // 🛡️ Regroupe les routes de modération réservées au Staff/Admin (préfixe /api/v1/admin)
@@ -90,6 +111,12 @@ export class BiensController {
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class AdminBiensController {
   constructor(private annoncesService: AnnoncesService) {}
+
+  @Roles('STAFF', 'ADMIN')
+  @Get()
+  async fileAttente(@Query('statut') statut?: string) {
+    return this.annoncesService.getBiensEnAttente(statut);
+  }
 
   @Roles('STAFF', 'ADMIN')
   @Post(':id/valider')

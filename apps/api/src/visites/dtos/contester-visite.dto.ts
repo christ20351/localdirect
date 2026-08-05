@@ -1,6 +1,6 @@
 import { IsNotEmpty, IsString, IsOptional, IsIn } from 'class-validator';
 
-const MOTIFS_CONTESTATION = ['INDISPONIBLE', 'NON_CONFORME', 'AGENT_ABSENT', 'PRIX_DIFFERENT'];
+const MOTIFS_CONTESTATION = ['INDISPONIBLE', 'NON_CONFORME', 'BAILLEUR_INJOIGNABLE', 'PRIX_DIFFERENT'];
 
 export class ContesterVisiteDto {
   @IsNotEmpty()

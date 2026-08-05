@@ -29,6 +29,9 @@ class _AjouterBienScreenState extends ConsumerState<AjouterBienScreen> {
   final _quartierCustomCtrl = TextEditingController();
   final _repereCtrl = TextEditingController();
   final _accesCtrl = TextEditingController();
+  final _telephoneCtrl = TextEditingController();
+  final _whatsappCtrl = TextEditingController();
+  bool _memeNumeroWhatsapp = true;
 
   // Valeurs par défaut
   String _typeBien = 'STUDIO';
@@ -70,6 +73,9 @@ class _AjouterBienScreenState extends ConsumerState<AjouterBienScreen> {
     _titreCtrl.text = b.titre ?? '';
     _loyerCtrl.text = (b.loyerMensuelXAF ?? 0).toString();
     _quartierCustomCtrl.text = b.quartier ?? '';
+    _telephoneCtrl.text = b.bailleurTel ?? '';
+    _whatsappCtrl.text = b.bailleurWhatsapp ?? '';
+    _memeNumeroWhatsapp = _whatsappCtrl.text.isEmpty || _whatsappCtrl.text == _telephoneCtrl.text;
     if (b.type.isNotEmpty) _typeBien = b.type;
     _meuble = b.meuble;
     _useCustomQuartier = (b.quartier != null && b.quartier!.isNotEmpty);
@@ -86,6 +92,8 @@ class _AjouterBienScreenState extends ConsumerState<AjouterBienScreen> {
     _quartierCustomCtrl.dispose();
     _repereCtrl.dispose();
     _accesCtrl.dispose();
+    _telephoneCtrl.dispose();
+    _whatsappCtrl.dispose();
     super.dispose();
   }
 
@@ -127,7 +135,7 @@ class _AjouterBienScreenState extends ConsumerState<AjouterBienScreen> {
   Future<void> _pickImageFromGallery() async {
     if (_photosPaths.length >= 4) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Limite de 4 photos maximum atteinte.')),
+        SnackBar(content: Text(context.tr('bailleur_add_bien_photo_limit'))),
       );
       return;
     }
@@ -144,21 +152,11 @@ class _AjouterBienScreenState extends ConsumerState<AjouterBienScreen> {
         });
       }
     } catch (_) {
-      _ajouterDemoImageFallback();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.tr('bailleur_add_bien_photo_error'))),
+      );
     }
-  }
-
-  void _ajouterDemoImageFallback() {
-    if (_photosPaths.length >= 4) return;
-    final demoUrls = [
-      'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1484154218962-a197022b5858?auto=format&fit=crop&w=800&q=80',
-    ];
-    setState(() {
-      _photosPaths.add(demoUrls[_photosPaths.length % demoUrls.length]);
-    });
   }
 
   void _retirerPhoto(int index) {
@@ -179,6 +177,14 @@ class _AjouterBienScreenState extends ConsumerState<AjouterBienScreen> {
 
   /// 🚀 Soumission (Création OU Édition complète du bien)
   Future<void> _soumettreFormulaire() async {
+    if (_telephoneCtrl.text.trim().isEmpty || (!_memeNumeroWhatsapp && _whatsappCtrl.text.trim().isEmpty)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.tr('bailleur_add_bien_contact_required'))),
+      );
+      setState(() => _currentStep = 0);
+      return;
+    }
+
     final loyerXAF = int.tryParse(_loyerCtrl.text.trim()) ?? 0;
     final chargesXAF = int.tryParse(_chargesCtrl.text.trim()) ?? 0;
 
@@ -187,8 +193,15 @@ class _AjouterBienScreenState extends ConsumerState<AjouterBienScreen> {
         ? customQuartier
         : (_selectedQuartier?.nom ?? '');
 
+    // Seules les URL déjà distantes (photos existantes en édition) partent dans le JSON.
+    // Les fichiers locaux nouvellement choisis sont uploadés séparément en multipart
+    // une fois le bien créé/modifié — un chemin de fichier local n'a aucun sens comme
+    // "URL de photo" pour qui que ce soit d'autre que cet appareil.
+    final photosDistantes = _photosPaths.where((p) => p.startsWith('http')).toList();
+    final photosLocales = _photosPaths.where((p) => !p.startsWith('http')).toList();
+
     final payload = {
-      'titre': _titreCtrl.text.trim().isEmpty ? 'Annonce $_typeBien' : _titreCtrl.text.trim(),
+      'titre': _titreCtrl.text.trim().isEmpty ? '${context.tr('bailleur_add_bien_titre_fallback_prefix')} $_typeBien' : _titreCtrl.text.trim(),
       'description': _descriptionCtrl.text.trim(),
       'type': _typeBien,
       'villeId': _selectedVille?.id ?? 'douala',
@@ -206,21 +219,33 @@ class _AjouterBienScreenState extends ConsumerState<AjouterBienScreen> {
       'equipements': _equipementsSelectionnes,
       'compteurElectricite': _compteurEneo,
       'compteurEau': _compteurEau,
-      'photos': _photosPaths,
+      'photos': photosDistantes,
+      'bailleurTel': _telephoneCtrl.text.trim(),
+      'whatsapp': _memeNumeroWhatsapp ? _telephoneCtrl.text.trim() : _whatsappCtrl.text.trim(),
     };
+
+    final texteEditSucces = context.tr('bailleur_add_bien_edit_success');
+    final texteEditErreur = context.tr('bailleur_add_bien_edit_error');
+    final texteCreationSucces = context.tr('bailleur_add_bien_success');
 
     setState(() => _isSubmitting = true);
 
     bool isSuccess = false;
     String message = '';
+    String? bienId = widget.bienToEdit?.id;
 
     if (widget.bienToEdit != null) {
       isSuccess = await ref.read(bailleurRepositoryProvider).modifierBien(widget.bienToEdit!.id, payload);
-      message = isSuccess ? 'Bien et photos mis à jour avec succès !' : 'Erreur de modification.';
+      message = isSuccess ? texteEditSucces : texteEditErreur;
     } else {
       final res = await ref.read(bailleurRepositoryProvider).creerBien(payload);
       isSuccess = (res['success'] == true);
-      message = res['message'] ?? 'Bien publié avec succès !';
+      message = res['message'] ?? texteCreationSucces;
+      if (isSuccess) bienId = (res['data'] as Map<String, dynamic>?)?['bienId'] as String?;
+    }
+
+    if (isSuccess && bienId != null && photosLocales.isNotEmpty) {
+      await ref.read(bailleurRepositoryProvider).ajouterMedias(bienId, photosLocales);
     }
 
     setState(() => _isSubmitting = false);
@@ -243,7 +268,7 @@ class _AjouterBienScreenState extends ConsumerState<AjouterBienScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(isEdit ? 'Modifier le Bien' : context.tr('bailleur_add_bien_title')),
+        title: Text(isEdit ? context.tr('bailleur_add_bien_title_edit') : context.tr('bailleur_add_bien_title')),
       ),
       body: SafeArea(
         child: Column(
@@ -258,17 +283,17 @@ class _AjouterBienScreenState extends ConsumerState<AjouterBienScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'Étape ${_currentStep + 1} sur 4',
+                        '${context.tr('bailleur_add_bien_step_label')} ${_currentStep + 1} ${context.tr('bailleur_add_bien_step_of_total')}',
                         style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary, fontSize: 13),
                       ),
                       Text(
                         _currentStep == 0
-                            ? '1. Général'
+                            ? context.tr('bailleur_add_bien_step1_short')
                             : _currentStep == 1
-                                ? '2. Localisation'
+                                ? context.tr('bailleur_add_bien_step2_short')
                                 : _currentStep == 2
-                                    ? '3. Photos'
-                                    : '4. Prix & Options',
+                                    ? context.tr('bailleur_add_bien_step3_short')
+                                    : context.tr('bailleur_add_bien_step4_short'),
                         style: TextStyle(color: Colors.grey[400], fontSize: 12, fontWeight: FontWeight.w600),
                       ),
                     ],
@@ -316,7 +341,7 @@ class _AjouterBienScreenState extends ConsumerState<AjouterBienScreen> {
                     Expanded(
                       child: OutlinedButton(
                         onPressed: () => setState(() => _currentStep--),
-                        child: const Text('Précédent'),
+                        child: Text(context.tr('common_previous')),
                       ),
                     ),
                   if (_currentStep > 0) const SizedBox(width: 12),
@@ -337,7 +362,9 @@ class _AjouterBienScreenState extends ConsumerState<AjouterBienScreen> {
                               height: 20,
                               child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                             )
-                          : Text(_currentStep < 3 ? 'Suivant ➔' : (isEdit ? 'Enregistrer tout' : 'Publier mon Bien')),
+                          : Text(_currentStep < 3
+                              ? '${context.tr('common_next')} ➔'
+                              : (isEdit ? context.tr('bailleur_add_bien_save_all') : context.tr('bailleur_add_bien_publish'))),
                     ),
                   ),
                 ],
@@ -373,23 +400,23 @@ class _AjouterBienScreenState extends ConsumerState<AjouterBienScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Étape 1 : Type & Identité du bien', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        Text(context.tr('bailleur_add_bien_step1_title'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         const SizedBox(height: 6),
-        Text('Sélectionnez la catégorie de votre logement.', style: TextStyle(color: Colors.grey[400], fontSize: 13)),
+        Text(context.tr('bailleur_add_bien_step1_subtitle'), style: TextStyle(color: Colors.grey[400], fontSize: 13)),
 
         const SizedBox(height: 20),
 
         DropdownButtonFormField<String>(
           value: _typeBien,
-          decoration: const InputDecoration(labelText: 'Type de bien', prefixIcon: Icon(Icons.home_work)),
-          items: const [
-            DropdownMenuItem(value: 'STUDIO', child: Text('Studio Moderne')),
-            DropdownMenuItem(value: 'APPARTEMENT', child: Text('Appartement')),
-            DropdownMenuItem(value: 'CHAMBRE_MODERNE', child: Text('Chambre Moderne')),
-            DropdownMenuItem(value: 'CHAMBRE_SIMPLE', child: Text('Chambre Simple')),
-            DropdownMenuItem(value: 'DUPLEX', child: Text('Duplex')),
-            DropdownMenuItem(value: 'MAISON', child: Text('Maison / Villa')),
-            DropdownMenuItem(value: 'BOUTIQUE', child: Text('Boutique / Bureau')),
+          decoration: InputDecoration(labelText: context.tr('bailleur_add_bien_type_label'), prefixIcon: const Icon(Icons.home_work)),
+          items: [
+            DropdownMenuItem(value: 'STUDIO', child: Text(context.tr('type_bien_studio'))),
+            DropdownMenuItem(value: 'APPARTEMENT', child: Text(context.tr('type_bien_appartement'))),
+            DropdownMenuItem(value: 'CHAMBRE_MODERNE', child: Text(context.tr('type_bien_chambre_moderne'))),
+            DropdownMenuItem(value: 'CHAMBRE_SIMPLE', child: Text(context.tr('type_bien_chambre_simple'))),
+            DropdownMenuItem(value: 'DUPLEX', child: Text(context.tr('type_bien_duplex'))),
+            DropdownMenuItem(value: 'MAISON', child: Text(context.tr('type_bien_maison'))),
+            DropdownMenuItem(value: 'BOUTIQUE', child: Text(context.tr('type_bien_boutique'))),
           ],
           onChanged: (val) => setState(() => _typeBien = val ?? 'STUDIO'),
         ),
@@ -400,7 +427,7 @@ class _AjouterBienScreenState extends ConsumerState<AjouterBienScreen> {
           controller: _titreCtrl,
           decoration: InputDecoration(
             labelText: context.tr('bailleur_add_bien_titre_label'),
-            hintText: 'Ex: Studio Moderne Climatisé avec Balcon',
+            hintText: context.tr('bailleur_add_bien_titre_hint'),
             prefixIcon: const Icon(Icons.title),
           ),
         ),
@@ -410,12 +437,52 @@ class _AjouterBienScreenState extends ConsumerState<AjouterBienScreen> {
         TextFormField(
           controller: _descriptionCtrl,
           maxLines: 4,
-          decoration: const InputDecoration(
-            labelText: 'Description détaillée du bien',
-            hintText: 'Décrivez l\'aménagement, le calme du quartier, la proximité des transports...',
-            prefixIcon: Icon(Icons.notes),
+          decoration: InputDecoration(
+            labelText: context.tr('bailleur_add_bien_description_label'),
+            hintText: context.tr('bailleur_add_bien_description_hint'),
+            prefixIcon: const Icon(Icons.notes),
           ),
         ),
+
+        const SizedBox(height: 24),
+        Text(context.tr('bailleur_add_bien_contact_title'), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 4),
+        Text(context.tr('bailleur_add_bien_contact_subtitle'), style: TextStyle(color: Colors.grey[400], fontSize: 12)),
+        const SizedBox(height: 12),
+
+        TextFormField(
+          controller: _telephoneCtrl,
+          keyboardType: TextInputType.phone,
+          decoration: InputDecoration(
+            labelText: context.tr('bailleur_add_bien_phone_label'),
+            prefixText: '+237 ',
+            prefixIcon: const Icon(Icons.call_outlined),
+          ),
+          onChanged: (_) => setState(() {}),
+        ),
+
+        const SizedBox(height: 12),
+
+        CheckboxListTile(
+          contentPadding: EdgeInsets.zero,
+          controlAffinity: ListTileControlAffinity.leading,
+          value: _memeNumeroWhatsapp,
+          title: Text(context.tr('bailleur_add_bien_same_whatsapp'), style: const TextStyle(fontSize: 13)),
+          onChanged: (v) => setState(() => _memeNumeroWhatsapp = v ?? true),
+        ),
+
+        if (!_memeNumeroWhatsapp) ...[
+          const SizedBox(height: 4),
+          TextFormField(
+            controller: _whatsappCtrl,
+            keyboardType: TextInputType.phone,
+            decoration: InputDecoration(
+              labelText: context.tr('bailleur_add_bien_whatsapp_label'),
+              prefixText: '+237 ',
+              prefixIcon: const Icon(Icons.chat_outlined),
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -425,9 +492,9 @@ class _AjouterBienScreenState extends ConsumerState<AjouterBienScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Étape 2 : Localisation & Repères', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        Text(context.tr('bailleur_add_bien_step2_title'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         const SizedBox(height: 6),
-        Text('Indiquez la ville et le quartier exacts.', style: TextStyle(color: Colors.grey[400], fontSize: 13)),
+        Text(context.tr('bailleur_add_bien_step2_subtitle'), style: TextStyle(color: Colors.grey[400], fontSize: 13)),
 
         const SizedBox(height: 20),
 
@@ -436,7 +503,7 @@ class _AjouterBienScreenState extends ConsumerState<AjouterBienScreen> {
         else ...[
           DropdownButtonFormField<VilleOption>(
             value: _selectedVille,
-            decoration: const InputDecoration(labelText: 'Ville (Cameroun)', prefixIcon: Icon(Icons.location_city)),
+            decoration: InputDecoration(labelText: context.tr('bailleur_add_bien_ville_full_label'), prefixIcon: const Icon(Icons.location_city)),
             items: _villesDisponibles.map((v) {
               return DropdownMenuItem(value: v, child: Text(v.nom));
             }).toList(),
@@ -456,7 +523,7 @@ class _AjouterBienScreenState extends ConsumerState<AjouterBienScreen> {
               children: [
                 DropdownButtonFormField<QuartierOption>(
                   value: _selectedQuartier,
-                  decoration: const InputDecoration(labelText: 'Sélectionnez le quartier', prefixIcon: Icon(Icons.map)),
+                  decoration: InputDecoration(labelText: context.tr('bailleur_add_bien_quartier_select_label'), prefixIcon: const Icon(Icons.map)),
                   items: _quartiersDisponibles.map((q) {
                     return DropdownMenuItem(value: q, child: Text(q.nom));
                   }).toList(),
@@ -466,7 +533,7 @@ class _AjouterBienScreenState extends ConsumerState<AjouterBienScreen> {
                 ),
                 TextButton.icon(
                   icon: const Icon(Icons.edit, size: 16),
-                  label: const Text('Saisir le nom d\'un autre quartier'),
+                  label: Text(context.tr('bailleur_add_bien_quartier_custom_button')),
                   onPressed: () => setState(() => _useCustomQuartier = true),
                 ),
               ],
@@ -478,20 +545,20 @@ class _AjouterBienScreenState extends ConsumerState<AjouterBienScreen> {
                 TextFormField(
                   controller: _quartierCustomCtrl,
                   decoration: InputDecoration(
-                    labelText: 'Nom du Quartier (Saisie Libre)',
-                    hintText: 'Ex: Bonapriso, Ndogpassi, Melen...',
+                    labelText: context.tr('bailleur_add_bien_quartier_custom_label'),
+                    hintText: context.tr('bailleur_add_bien_quartier_custom_hint'),
                     prefixIcon: const Icon(Icons.edit_location_alt),
                     suffixIcon: _quartiersDisponibles.isNotEmpty
                         ? IconButton(
                             icon: const Icon(Icons.list),
                             onPressed: () => setState(() => _useCustomQuartier = false),
-                            tooltip: 'Revenir à la liste',
+                            tooltip: context.tr('bailleur_add_bien_quartier_back_to_list'),
                           )
                         : null,
                   ),
                 ),
                 const SizedBox(height: 4),
-                Text('Saisissez librement n\'importe quel nom de quartier au Cameroun.', style: TextStyle(color: Colors.grey[400], fontSize: 11)),
+                Text(context.tr('bailleur_add_bien_quartier_custom_helper'), style: TextStyle(color: Colors.grey[400], fontSize: 11)),
               ],
             ),
         ],
@@ -500,10 +567,10 @@ class _AjouterBienScreenState extends ConsumerState<AjouterBienScreen> {
 
         TextFormField(
           controller: _repereCtrl,
-          decoration: const InputDecoration(
-            labelText: 'Point de repère principal',
-            hintText: 'Ex: Carrefour Camico / Station Total Makèpè',
-            prefixIcon: Icon(Icons.place),
+          decoration: InputDecoration(
+            labelText: context.tr('bailleur_add_bien_repere_label'),
+            hintText: context.tr('bailleur_add_bien_repere_hint'),
+            prefixIcon: const Icon(Icons.place),
           ),
         ),
 
@@ -511,10 +578,10 @@ class _AjouterBienScreenState extends ConsumerState<AjouterBienScreen> {
 
         TextFormField(
           controller: _accesCtrl,
-          decoration: const InputDecoration(
-            labelText: 'Indications d\'accès (Masquées au public)',
-            hintText: 'Ex: Entrée après la pharmacie, portail vert',
-            prefixIcon: Icon(Icons.directions),
+          decoration: InputDecoration(
+            labelText: context.tr('bailleur_add_bien_access_full_label'),
+            hintText: context.tr('bailleur_add_bien_access_hint'),
+            prefixIcon: const Icon(Icons.directions),
           ),
         ),
       ],
@@ -529,7 +596,7 @@ class _AjouterBienScreenState extends ConsumerState<AjouterBienScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text('Étape 3 : Photos du Logement', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            Text(context.tr('bailleur_add_bien_step3_title'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
@@ -537,7 +604,7 @@ class _AjouterBienScreenState extends ConsumerState<AjouterBienScreen> {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
-                '${_photosPaths.length} / 4 photos',
+                '${_photosPaths.length} ${context.tr('bailleur_add_bien_photos_count_suffix')}',
                 style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 12),
               ),
             ),
@@ -545,7 +612,7 @@ class _AjouterBienScreenState extends ConsumerState<AjouterBienScreen> {
         ),
         const SizedBox(height: 6),
         Text(
-          'Sélectionnez jusqu\'à 4 photos nettes depuis votre galerie mobile.',
+          context.tr('bailleur_add_bien_step3_subtitle'),
           style: TextStyle(color: Colors.grey[400], fontSize: 13),
         ),
 
@@ -560,7 +627,7 @@ class _AjouterBienScreenState extends ConsumerState<AjouterBienScreen> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
             icon: const Icon(Icons.photo_library, color: Colors.white),
-            label: const Text('Sélectionner depuis ma Galerie Photo'),
+            label: Text(context.tr('bailleur_add_bien_pick_gallery_button')),
             onPressed: _photosPaths.length >= 4 ? null : _pickImageFromGallery,
           ),
         ),
@@ -576,13 +643,13 @@ class _AjouterBienScreenState extends ConsumerState<AjouterBienScreen> {
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: AppColors.darkBorder, style: BorderStyle.solid),
             ),
-            child: const Center(
+            child: Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.add_a_photo_outlined, size: 40, color: Colors.grey),
-                  SizedBox(height: 8),
-                  Text('Aucune photo ajoutée', style: TextStyle(color: Colors.grey)),
+                  const Icon(Icons.add_a_photo_outlined, size: 40, color: Colors.grey),
+                  const SizedBox(height: 8),
+                  Text(context.tr('bailleur_add_bien_no_photos'), style: const TextStyle(color: Colors.grey)),
                 ],
               ),
             ),
@@ -640,9 +707,9 @@ class _AjouterBienScreenState extends ConsumerState<AjouterBienScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Étape 4 : Prix, Caution & Équipements', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        Text(context.tr('bailleur_add_bien_step4_title'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         const SizedBox(height: 6),
-        Text('Définissez vos conditions de loyer et compteurs.', style: TextStyle(color: Colors.grey[400], fontSize: 13)),
+        Text(context.tr('bailleur_add_bien_step4_subtitle'), style: TextStyle(color: Colors.grey[400], fontSize: 13)),
 
         const SizedBox(height: 20),
 
@@ -652,10 +719,10 @@ class _AjouterBienScreenState extends ConsumerState<AjouterBienScreen> {
               child: TextFormField(
                 controller: _loyerCtrl,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Loyer mensuel',
+                decoration: InputDecoration(
+                  labelText: context.tr('bailleur_add_bien_loyer_short_label'),
                   suffixText: 'FCFA',
-                  prefixIcon: Icon(Icons.monetization_on),
+                  prefixIcon: const Icon(Icons.monetization_on),
                 ),
               ),
             ),
@@ -664,10 +731,10 @@ class _AjouterBienScreenState extends ConsumerState<AjouterBienScreen> {
               child: TextFormField(
                 controller: _chargesCtrl,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Charges',
+                decoration: InputDecoration(
+                  labelText: context.tr('bailleur_add_bien_charges_short_label'),
                   suffixText: 'FCFA',
-                  prefixIcon: Icon(Icons.receipt_long),
+                  prefixIcon: const Icon(Icons.receipt_long),
                 ),
               ),
             ),
@@ -677,7 +744,7 @@ class _AjouterBienScreenState extends ConsumerState<AjouterBienScreen> {
         const SizedBox(height: 12),
 
         SwitchListTile(
-          title: const Text('Charges incluses dans le loyer'),
+          title: Text(context.tr('bailleur_add_bien_charges_included')),
           value: _chargesIncluses,
           onChanged: (val) => setState(() => _chargesIncluses = val),
         ),
@@ -689,8 +756,8 @@ class _AjouterBienScreenState extends ConsumerState<AjouterBienScreen> {
             Expanded(
               child: DropdownButtonFormField<int>(
                 value: _avanceMois,
-                decoration: const InputDecoration(labelText: 'Avance (mois)'),
-                items: [2, 3, 4, 5, 6].map((m) => DropdownMenuItem(value: m, child: Text('$m mois'))).toList(),
+                decoration: InputDecoration(labelText: context.tr('bailleur_add_bien_avance_label')),
+                items: [2, 3, 4, 5, 6].map((m) => DropdownMenuItem(value: m, child: Text('$m ${context.tr('bailleur_add_bien_mois_suffix')}'))).toList(),
                 onChanged: (val) => setState(() => _avanceMois = val ?? 3),
               ),
             ),
@@ -698,8 +765,8 @@ class _AjouterBienScreenState extends ConsumerState<AjouterBienScreen> {
             Expanded(
               child: DropdownButtonFormField<int>(
                 value: _cautionMois,
-                decoration: const InputDecoration(labelText: 'Caution (mois)'),
-                items: [1, 2, 3].map((m) => DropdownMenuItem(value: m, child: Text('$m mois'))).toList(),
+                decoration: InputDecoration(labelText: context.tr('bailleur_add_bien_caution_label')),
+                items: [1, 2, 3].map((m) => DropdownMenuItem(value: m, child: Text('$m ${context.tr('bailleur_add_bien_mois_suffix')}'))).toList(),
                 onChanged: (val) => setState(() => _cautionMois = val ?? 1),
               ),
             ),
@@ -713,14 +780,14 @@ class _AjouterBienScreenState extends ConsumerState<AjouterBienScreen> {
             DropdownButtonFormField<String>(
               isExpanded: true,
               value: _compteurEneo,
-              decoration: const InputDecoration(
-                labelText: 'Compteur Électricité (ENEO)',
-                prefixIcon: Icon(Icons.bolt),
+              decoration: InputDecoration(
+                labelText: context.tr('bailleur_add_bien_compteur_eneo_label'),
+                prefixIcon: const Icon(Icons.bolt),
               ),
-              items: const [
-                DropdownMenuItem(value: 'INDIVIDUEL', child: Text('Individuel (Propre compteur)', overflow: TextOverflow.ellipsis)),
-                DropdownMenuItem(value: 'COMMUN', child: Text('Décompteur Commun', overflow: TextOverflow.ellipsis)),
-                DropdownMenuItem(value: 'FORFAIT', child: Text('Forfait mensuel inclus', overflow: TextOverflow.ellipsis)),
+              items: [
+                DropdownMenuItem(value: 'INDIVIDUEL', child: Text(context.tr('bailleur_add_bien_compteur_individuel'), overflow: TextOverflow.ellipsis)),
+                DropdownMenuItem(value: 'COMMUN', child: Text(context.tr('bailleur_add_bien_compteur_commun'), overflow: TextOverflow.ellipsis)),
+                DropdownMenuItem(value: 'FORFAIT', child: Text(context.tr('bailleur_add_bien_compteur_forfait'), overflow: TextOverflow.ellipsis)),
               ],
               onChanged: (val) => setState(() => _compteurEneo = val ?? 'INDIVIDUEL'),
             ),
@@ -728,14 +795,14 @@ class _AjouterBienScreenState extends ConsumerState<AjouterBienScreen> {
             DropdownButtonFormField<String>(
               isExpanded: true,
               value: _compteurEau,
-              decoration: const InputDecoration(
-                labelText: 'Source d\'eau',
-                prefixIcon: Icon(Icons.water_drop),
+              decoration: InputDecoration(
+                labelText: context.tr('bailleur_add_bien_source_eau_label'),
+                prefixIcon: const Icon(Icons.water_drop),
               ),
-              items: const [
-                DropdownMenuItem(value: 'CAMWATER', child: Text('Camwater (Robinet)', overflow: TextOverflow.ellipsis)),
-                DropdownMenuItem(value: 'FORAGE', child: Text('Forage / Château d\'eau', overflow: TextOverflow.ellipsis)),
-                DropdownMenuItem(value: 'PUITS', child: Text('Puits aménagé', overflow: TextOverflow.ellipsis)),
+              items: [
+                DropdownMenuItem(value: 'CAMWATER', child: Text(context.tr('bailleur_add_bien_eau_camwater'), overflow: TextOverflow.ellipsis)),
+                DropdownMenuItem(value: 'FORAGE', child: Text(context.tr('bailleur_add_bien_eau_forage'), overflow: TextOverflow.ellipsis)),
+                DropdownMenuItem(value: 'PUITS', child: Text(context.tr('bailleur_add_bien_eau_puits'), overflow: TextOverflow.ellipsis)),
               ],
               onChanged: (val) => setState(() => _compteurEau = val ?? 'CAMWATER'),
             ),
@@ -745,7 +812,7 @@ class _AjouterBienScreenState extends ConsumerState<AjouterBienScreen> {
         const SizedBox(height: 16),
 
         SwitchListTile(
-          title: const Text('Logement Meublé'),
+          title: Text(context.tr('bailleur_add_bien_meuble_label')),
           value: _meuble,
           onChanged: (val) => setState(() => _meuble = val),
         ),

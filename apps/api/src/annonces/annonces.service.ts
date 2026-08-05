@@ -4,12 +4,19 @@ import { FiltreAnnonceDto } from './dtos/filtre-annonce.dto';
 import { CreerBienDto } from './dtos/creer-bien.dto';
 import { ModifierBienDto } from './dtos/modifier-bien.dto';
 import { StatutBien, StatutVille } from '@prisma/client';
+import { computePerceptualHash, hammingDistanceHex, SEUIL_DOUBLON_PHASH } from './phash.util';
+import { AuditService } from '../audit/audit.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class AnnoncesService implements OnModuleInit {
   private readonly logger = new Logger(AnnoncesService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private auditService: AuditService,
+    private notificationsService: NotificationsService,
+  ) {}
 
   // Initialisation automatique des annonces de démonstration au démarrage
   async onModuleInit() {
@@ -123,7 +130,7 @@ export class AnnoncesService implements OnModuleInit {
     return this.formatAnnonceResponse(item);
   }
 
-  /// ➕ Créer un bien et son annonce associée par un Agent / Bailleur
+  /// ➕ Créer un bien et son annonce associée par un Bailleur (contact direct locataire ↔ bailleur)
   async creerBienEtAnnonce(utilisateurId: string, dto: CreerBienDto) {
     const reference = `DLA-BM-${Date.now().toString().substring(7)}`;
 
@@ -184,6 +191,8 @@ export class AnnoncesService implements OnModuleInit {
       data: {
         reference,
         bailleurId: utilisateurId,
+        bailleurTel: dto.bailleurTel,
+        bailleurWhatsapp: dto.whatsapp,
         creeParId: utilisateurId,
         villeId: targetVilleId,
         quartierId: targetQuartierId,
@@ -191,12 +200,14 @@ export class AnnoncesService implements OnModuleInit {
         indicationAcces: dto.indicationAcces,
         type: dto.type,
         meuble: dto.meuble || false,
+        compteurElectricite: dto.compteurElectricite,
+        compteurEau: dto.compteurEau,
         equipements: dto.equipements || [],
         latitude: dto.latitude,
         longitude: dto.longitude,
         latitudeFloue,
         longitudeFloue,
-        statut: StatutBien.DISPONIBLE, // Disponible immédiatement à la publication
+        statut: StatutBien.EN_VERIFICATION, // Le bien doit être vérifié par le Staff (preuve de propriété) avant publication
         annonces: {
           create: {
             titre: dto.titre,
@@ -340,8 +351,11 @@ export class AnnoncesService implements OnModuleInit {
         ...(dto.type ? { type: dto.type as any } : {}),
         ...(dto.indicationAcces !== undefined ? { indicationAcces: dto.indicationAcces } : {}),
         ...(dto.meuble !== undefined ? { meuble: dto.meuble } : {}),
+        ...(dto.compteurElectricite !== undefined ? { compteurElectricite: dto.compteurElectricite } : {}),
+        ...(dto.compteurEau !== undefined ? { compteurEau: dto.compteurEau } : {}),
         ...(dto.equipements !== undefined ? { equipements: dto.equipements } : {}),
-        ...(dto.statut ? { statut: dto.statut as any } : {}),
+        ...(dto.bailleurTel !== undefined ? { bailleurTel: dto.bailleurTel } : {}),
+        ...(dto.whatsapp !== undefined ? { bailleurWhatsapp: dto.whatsapp } : {}),
       },
     });
 
@@ -367,13 +381,43 @@ export class AnnoncesService implements OnModuleInit {
         data: dto.photos.map((url, index) => ({
           bienId,
           storageKey: url,
-          type: 'PHOTO' as any,
           ordre: index,
         })),
       });
     }
 
     return { message: 'Bien mis à jour avec succès.' };
+  }
+
+  /// 📸 Ajouter des photos réellement uploadées (fichiers) à un bien — réservé au propriétaire/créateur
+  async ajouterMedias(utilisateurId: string, bienId: string, files: Express.Multer.File[], baseUrl: string) {
+    const bien = await this.prisma.bien.findUnique({ where: { id: bienId } });
+    if (!bien) {
+      throw new NotFoundException(`Bien introuvable pour l'ID : ${bienId}`);
+    }
+    if (bien.bailleurId !== utilisateurId && bien.creeParId !== utilisateurId) {
+      throw new ForbiddenException('Ce bien ne vous appartient pas.');
+    }
+
+    const dejaExistants = await this.prisma.media.count({ where: { bienId } });
+    // Hachage perceptuel calculé avant l'écriture en base (lecture disque, hors transaction).
+    const phashes = await Promise.all(files.map((file) => computePerceptualHash(file.path)));
+
+    const medias = await this.prisma.$transaction(
+      files.map((file, index) =>
+        this.prisma.media.create({
+          data: {
+            bienId,
+            storageKey: `${baseUrl}/uploads/medias/${file.filename}`,
+            ordre: dejaExistants + index,
+            tailleOctets: file.size,
+            phash: phashes[index] ?? undefined,
+          },
+        }),
+      ),
+    );
+
+    return medias.map((m) => ({ id: m.id, storageKey: m.storageKey, ordre: m.ordre, phash: m.phash }));
   }
 
   /// ✅ Marquer un bien comme loué (fin de disponibilité) — réservé au bailleur propriétaire
@@ -384,6 +428,47 @@ export class AnnoncesService implements OnModuleInit {
       data: { statut: StatutBien.LOUE },
     });
     return { message: 'Bien marqué comme loué.' };
+  }
+
+  /// 🛡️ File de modération des biens — réservé au Staff/Admin (défaut : EN_VERIFICATION)
+  async getBiensEnAttente(statut?: string) {
+    const biens = await this.prisma.bien.findMany({
+      where: { statut: (statut as StatutBien) || StatutBien.EN_VERIFICATION },
+      orderBy: { createdAt: 'asc' },
+      include: {
+        ville: true,
+        quartier: true,
+        medias: true,
+        annonces: { orderBy: { createdAt: 'desc' }, take: 1 },
+        bailleur: { select: { nomComplet: true, telephone: true } },
+        creePar: { select: { nomComplet: true, telephone: true, roles: true } },
+      },
+    });
+
+    // Détection de doublons photo (anti-fraude) : on ne compare qu'aux hash déjà
+    // calculés (uploads réels), les URLs de démo/seed n'ont pas de phash.
+    const tousLesHashesAutres = biens.length
+      ? await this.prisma.media.findMany({
+          where: { bienId: { notIn: biens.map((b) => b.id) }, phash: { not: null } },
+          select: { bienId: true, phash: true },
+          take: 3000,
+        })
+      : [];
+
+    return biens.map((bien) => {
+      const hashesDuBien = bien.medias.map((m) => m.phash).filter((h): h is string => !!h);
+      const photosDupliquees = hashesDuBien.some((h) =>
+        tousLesHashesAutres.some((autre) => autre.phash && hammingDistanceHex(h, autre.phash) <= SEUIL_DOUBLON_PHASH),
+      );
+
+      return {
+        ...this.formatBienResponse(bien),
+        bailleur: bien.bailleur ? { nomComplet: bien.bailleur.nomComplet, telephone: bien.bailleur.telephone } : undefined,
+        bailleurTel: bien.bailleurTel,
+        creePar: bien.creePar ? { nomComplet: bien.creePar.nomComplet, telephone: bien.creePar.telephone, roles: bien.creePar.roles } : undefined,
+        photosDupliquees,
+      };
+    });
   }
 
   /// 🛡️ Valider un bien en attente de vérification — réservé au Staff/Admin
@@ -401,6 +486,12 @@ export class AnnoncesService implements OnModuleInit {
         motifRejet: null,
       },
     });
+
+    await this.auditService.log(staffId, 'BIEN_VALIDE', 'Bien', bienId, { statut: bien.statut }, { statut: StatutBien.DISPONIBLE });
+    if (bien.bailleurId) {
+      await this.notificationsService.creer(bien.bailleurId, 'BIEN_VALIDE', { bienId, bienReference: bien.reference });
+    }
+
     return { message: 'Bien validé et publié dans le catalogue.' };
   }
 
@@ -419,6 +510,12 @@ export class AnnoncesService implements OnModuleInit {
         motifRejet: motif,
       },
     });
+
+    await this.auditService.log(staffId, 'BIEN_REJETE', 'Bien', bienId, { statut: bien.statut }, { statut: StatutBien.REJETE, motif });
+    if (bien.bailleurId) {
+      await this.notificationsService.creer(bien.bailleurId, 'BIEN_REJETE', { bienId, bienReference: bien.reference, motif });
+    }
+
     return { message: 'Bien rejeté.' };
   }
 
@@ -449,6 +546,8 @@ export class AnnoncesService implements OnModuleInit {
       ville: bien.ville?.nom,
       quartier: bien.quartier?.nom,
       photos: bien.medias?.map((m: any) => m.storageKey) ?? [],
+      bailleurTel: bien.bailleurTel,
+      bailleurWhatsapp: bien.bailleurWhatsapp,
       annonceId: annonce?.id,
       titre: annonce?.titre,
       loyerMensuelXAF: annonce ? Number(annonce.loyerMensuel) : null,
@@ -480,7 +579,6 @@ export class AnnoncesService implements OnModuleInit {
         cautionMois,
         montantCautionXAF: montantCaution,
         totalInitialEntreeXAF: totalInitial,
-        fraisVisiteXAF: 2000,
       },
       bien: {
         id: item.bien.id,
@@ -496,6 +594,9 @@ export class AnnoncesService implements OnModuleInit {
         latitudeFloue: item.bien.latitudeFloue,
         longitudeFloue: item.bien.longitudeFloue,
         photos: item.bien.medias.map((m: any) => m.storageKey),
+        // Contact direct bailleur (plus d'intermédiaire agent) : visible dès la fiche annonce.
+        bailleurTel: item.bien.bailleurTel,
+        bailleurWhatsapp: item.bien.bailleurWhatsapp,
       },
       nbVues: item.nbVues,
       createdAt: item.createdAt,

@@ -71,6 +71,14 @@ export class CreerBienDto {
   meuble?: boolean;
 
   @IsOptional()
+  @IsString()
+  compteurElectricite?: string;
+
+  @IsOptional()
+  @IsString()
+  compteurEau?: string;
+
+  @IsOptional()
   @IsArray()
   @IsString({ each: true })
   equipements?: string[];
@@ -79,4 +87,14 @@ export class CreerBienDto {
   @IsArray()
   @IsString({ each: true })
   photos?: string[];
+
+  // Contact direct locataire ↔ bailleur (plus d'intermédiaire agent) : obligatoires
+  // à la publication, affichés tels quels sur l'annonce (bouton Appeler + WhatsApp).
+  @IsNotEmpty({ message: 'Le numéro à appeler est obligatoire.' })
+  @IsString()
+  bailleurTel: string;
+
+  @IsNotEmpty({ message: 'Le numéro WhatsApp est obligatoire.' })
+  @IsString()
+  whatsapp: string;
 }

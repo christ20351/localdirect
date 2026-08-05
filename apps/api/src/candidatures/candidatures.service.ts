@@ -2,11 +2,17 @@ import { Injectable, NotFoundException, ConflictException, ForbiddenException, B
 import { PrismaService } from '../prisma/prisma.service';
 import { CreerCandidatureDto } from './dtos/creer-candidature.dto';
 import { DeciderCandidatureDto } from './dtos/decider-candidature.dto';
-import { StatutBien } from '@prisma/client';
+import { StatutBien, StatutCandidature } from '@prisma/client';
+import { AuditService } from '../audit/audit.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class CandidaturesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private auditService: AuditService,
+    private notificationsService: NotificationsService,
+  ) {}
 
   /// 📋 Soumettre un dossier de candidature sur une annonce (locataire)
   /// Simplification volontaire par rapport au cahier des charges : soumission directe
@@ -110,6 +116,13 @@ export class CandidaturesService {
         where: { id },
         data: { statut: 'REFUSEE', motifRefus: dto.motif, decideeLe: new Date() },
       });
+
+      await this.auditService.log(bailleurId, 'CANDIDATURE_REFUSEE', 'Candidature', id, { statut: candidature.statut }, { statut: 'REFUSEE', motif: dto.motif });
+      await this.notificationsService.creer(candidature.locataireId, 'CANDIDATURE_REFUSEE', {
+        annonceId: candidature.annonceId,
+        motif: dto.motif,
+      });
+
       return { message: 'Dossier refusé.' };
     }
 
@@ -150,7 +163,50 @@ export class CandidaturesService {
       return nouveauBail;
     });
 
+    await this.auditService.log(
+      bailleurId,
+      'CANDIDATURE_ACCEPTEE',
+      'Candidature',
+      id,
+      { statut: candidature.statut },
+      { statut: 'ACCEPTEE', bailId: bail.id },
+    );
+    await this.notificationsService.creer(candidature.locataireId, 'CANDIDATURE_ACCEPTEE', {
+      annonceId: candidature.annonceId,
+      bailId: bail.id,
+    });
+
     return { message: 'Dossier accepté, un bail a été créé.', bailId: bail.id };
+  }
+
+  /// 🛡️ Vue d'ensemble Staff/Admin de toutes les candidatures de la plateforme (lecture seule)
+  async getToutesLesCandidatures(statut?: string) {
+    const candidatures = await this.prisma.candidature.findMany({
+      where: statut ? { statut: statut as StatutCandidature } : {},
+      orderBy: { soumiseLe: 'desc' },
+      include: {
+        garant: true,
+        locataire: { select: { nomComplet: true, telephone: true, statutKyc: true } },
+        annonce: {
+          include: {
+            bien: {
+              include: {
+                ville: true,
+                quartier: true,
+                bailleur: { select: { nomComplet: true, telephone: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    return candidatures.map((c) => ({
+      ...this.formatCandidature(c, true),
+      bailleur: c.annonce?.bien?.bailleur
+        ? { nomComplet: c.annonce.bien.bailleur.nomComplet, telephone: c.annonce.bien.bailleur.telephone }
+        : undefined,
+    }));
   }
 
   private async getCandidatureOuEchoue(id: string) {

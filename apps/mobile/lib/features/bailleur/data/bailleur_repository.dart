@@ -52,6 +52,29 @@ class BailleurRepository {
     }
   }
 
+  /// 📸 Upload réel des photos d'un bien (fichiers locaux) — POST /biens/:id/medias
+  /// Remplace l'ancien comportement qui envoyait le chemin local du fichier tel
+  /// quel comme "URL" de la photo (ce qui ne fonctionnait que sur l'appareil qui
+  /// avait pris la photo). Ici les fichiers sont réellement envoyés au serveur.
+  Future<List<String>> ajouterMedias(String bienId, List<String> cheminsFichiers) async {
+    if (cheminsFichiers.isEmpty) return [];
+    try {
+      final formData = FormData();
+      for (final chemin in cheminsFichiers) {
+        formData.files.add(MapEntry('photos', await MultipartFile.fromFile(chemin)));
+      }
+      final response = await _dio.post(
+        '/biens/$bienId/medias',
+        data: formData,
+        options: Options(contentType: 'multipart/form-data'),
+      );
+      final List list = response.data;
+      return list.map((m) => m['storageKey'] as String).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
   /// 📋 Dossiers de candidature reçus sur les biens du bailleur — GET /bailleur/candidatures
   Future<List<CandidatureModel>> fetchCandidaturesRecues() async {
     try {

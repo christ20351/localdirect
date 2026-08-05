@@ -178,27 +178,36 @@ class AnnonceCard extends StatelessWidget {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.baseline,
-                            textBaseline: TextBaseline.alphabetic,
-                            children: [
-                              Text(
-                                CurrencyFormatter.formatXAF(item.loyerMensuel),
-                                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.primary),
-                              ),
-                              Text(context.tr('card_per_month_short'), style: TextStyle(fontSize: 12, color: Colors.grey[500])),
-                            ],
-                          ),
-                          Text(
-                            '${context.tr('card_advance_label')} ${item.avanceMois} ${context.tr('card_month_abbrev')} · '
-                            '${context.tr('card_deposit_label')} ${item.cautionMois} ${context.tr('card_month_abbrev')}',
-                            style: TextStyle(fontSize: 11, color: Colors.grey[500]),
-                          ),
-                        ],
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.baseline,
+                              textBaseline: TextBaseline.alphabetic,
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    CurrencyFormatter.formatXAF(item.loyerMensuel),
+                                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.primary),
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
+                                  ),
+                                ),
+                                Text(context.tr('card_per_month_short'), style: TextStyle(fontSize: 12, color: Colors.grey[500])),
+                              ],
+                            ),
+                            Text(
+                              '${context.tr('card_advance_label')} ${item.avanceMois} ${context.tr('card_month_abbrev')} · '
+                              '${context.tr('card_deposit_label')} ${item.cautionMois} ${context.tr('card_month_abbrev')}',
+                              style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                          ],
+                        ),
                       ),
+                      const SizedBox(width: 8),
                       Chip(
                         label: Text(item.typeBien),
                         backgroundColor: AppColors.primary.withValues(alpha: 0.1),

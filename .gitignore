@@ -24,7 +24,7 @@ infra/data/
 
 .env.local
 .env.*.local
-apps/**/.env
+
 
 # IDE
 .idea/

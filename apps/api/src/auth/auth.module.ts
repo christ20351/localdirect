@@ -8,11 +8,13 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { OTP_PROVIDER_TOKEN } from './providers/otp-provider.interface';
 import { ConsoleOtpProvider } from './providers/console-otp.provider';
 import { CamPaySmsOtpProvider } from './providers/campay-sms-otp.provider';
+import { DocumentsModule } from '../documents/documents.module';
 
 @Module({
   imports: [
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.register({}),
+    DocumentsModule,
   ],
   controllers: [AuthController],
   providers: [

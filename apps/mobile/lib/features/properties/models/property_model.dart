@@ -16,6 +16,8 @@ class PropertyModel {
   final bool isVerified;
   final bool isAvailable;
   final DateTime publishedAt;
+  final String? bailleurTel;
+  final String? bailleurWhatsapp;
 
   PropertyModel({
     required this.id,
@@ -35,6 +37,8 @@ class PropertyModel {
     required this.isVerified,
     required this.isAvailable,
     required this.publishedAt,
+    this.bailleurTel,
+    this.bailleurWhatsapp,
   });
 
   /// L'API (`AnnoncesService.formatAnnonceResponse`) renvoie une forme imbriquée :
@@ -65,6 +69,8 @@ class PropertyModel {
       isVerified: statut == null || statut == 'DISPONIBLE',
       isAvailable: statut == null || statut == 'DISPONIBLE',
       publishedAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ?? DateTime.now(),
+      bailleurTel: bien['bailleurTel'] as String?,
+      bailleurWhatsapp: bien['bailleurWhatsapp'] as String?,
     );
   }
 
@@ -88,6 +94,8 @@ class PropertyModel {
         'pointRepere': pointRepere,
         'photos': photos,
         'statut': isAvailable ? 'DISPONIBLE' : 'LOUE',
+        'bailleurTel': bailleurTel,
+        'bailleurWhatsapp': bailleurWhatsapp,
       },
       'createdAt': publishedAt.toIso8601String(),
     };

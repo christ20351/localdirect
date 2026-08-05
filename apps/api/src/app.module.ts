@@ -9,6 +9,13 @@ import { VisitesModule } from './visites/visites.module';
 import { CandidaturesModule } from './candidatures/candidatures.module';
 import { BauxModule } from './baux/baux.module';
 import { AlertesModule } from './alertes/alertes.module';
+import { DocumentsModule } from './documents/documents.module';
+import { AuditModule } from './audit/audit.module';
+import { NotificationsModule } from './notifications/notifications.module';
+
+// AgentModule (rôle Agent/Démarcheur) volontairement désactivé : LocaDirect connecte
+// désormais directement Locataires et Bailleurs (WhatsApp/appel sur l'annonce), sans
+// intermédiaire. Le code du module reste sur disque mais n'est plus exposé par l'API.
 
 @Module({
   imports: [
@@ -22,6 +29,9 @@ import { AlertesModule } from './alertes/alertes.module';
     CandidaturesModule,
     BauxModule,
     AlertesModule,
+    DocumentsModule,
+    AuditModule,
+    NotificationsModule,
   ],
   controllers: [],
   providers: [],

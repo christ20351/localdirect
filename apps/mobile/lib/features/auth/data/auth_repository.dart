@@ -92,6 +92,7 @@ class AuthRepository {
       return {
         'success': true,
         'utilisateur': data['utilisateur'],
+        'intentionBailleur': data['intentionBailleur'] == true,
       };
     } on DioException catch (e) {
       return {
@@ -170,12 +171,15 @@ class AuthRepository {
   }
 
   /// 🏠 Ajoute le rôle Bailleur au compte connecté — POST /auth/devenir-bailleur
-  Future<bool> devenirBailleur() async {
+  /// Échoue tant que 2 documents de preuve de propriété n'ont pas été validés
+  /// par le Staff (voir DocumentsRepository) : le message d'erreur réel du
+  /// serveur est renvoyé pour guider l'utilisateur plutôt qu'un simple booléen.
+  Future<Map<String, dynamic>> devenirBailleur() async {
     try {
       await _dio.post('/auth/devenir-bailleur');
-      return true;
-    } on DioException {
-      return false;
+      return {'success': true};
+    } on DioException catch (e) {
+      return {'success': false, 'message': e.response?.data['message'] ?? 'Échec de la demande.'};
     }
   }
 

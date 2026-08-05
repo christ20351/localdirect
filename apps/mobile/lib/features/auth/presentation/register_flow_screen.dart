@@ -5,12 +5,17 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/auth_scaffold.dart';
 import '../../../core/l10n/app_localizations.dart';
 import '../../properties/presentation/property_provider.dart';
+import '../../documents/models/document_model.dart';
+import '../../documents/presentation/document_upload_screen.dart';
+
 import '../data/auth_repository.dart';
+import '../../../core/utils/session_reset.dart';
 
 /// Inscription en 5 étapes : Intention → Identité → Téléphone & ville → Mot de
 /// passe → Récapitulatif. Le compte est toujours créé avec le rôle LOCATAIRE
-/// (seul rôle avec un parcours complet aujourd'hui) ; BAILLEUR peut être ajouté
-/// dès l'inscription si l'utilisateur le souhaite (rôle léger, pas de KYC requis).
+/// (seul rôle avec un accès immédiat) ; si l'utilisateur a coché "aussi
+/// propriétaire", on l'oriente juste après vers la soumission des documents de
+/// preuve de propriété — le rôle BAILLEUR n'est accordé qu'une fois validés par le Staff.
 class RegisterFlowScreen extends ConsumerStatefulWidget {
   const RegisterFlowScreen({super.key});
 
@@ -121,6 +126,9 @@ class _RegisterFlowScreenState extends ConsumerState<RegisterFlowScreen> {
     if (!mounted) return;
 
     if (res['success'] == true) {
+      final vouliaitDevenirBailleur = res['intentionBailleur'] == true;
+      await invalidateSessionProviders(ref);
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(context.tr('register_success')),
@@ -128,23 +136,20 @@ class _RegisterFlowScreenState extends ConsumerState<RegisterFlowScreen> {
         ),
       );
       context.go('/');
+      if (vouliaitDevenirBailleur && mounted) {
+        Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => const DocumentUploadScreen(
+            typesRequis: TypesDocuments.preuvePropriete,
+            seuilRequis: TypesDocuments.seuilPreuvePropriete,
+            titreKey: 'bailleur_kyc_title',
+            sousTitreKey: 'bailleur_kyc_subtitle',
+          ),
+        ));
+      }
     } else {
       // On affiche la vraie erreur — plus de faux succès en cas d'échec.
       setState(() => _submitError = res['message'] ?? context.tr('register_error'));
     }
-  }
-
-  void _showAgentBientotDisponible() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(context.tr('register_agent_dialog_title')),
-        content: Text(context.tr('register_agent_dialog_body')),
-        actions: [
-          ElevatedButton(onPressed: () => Navigator.pop(ctx), child: Text(context.tr('common_understood'))),
-        ],
-      ),
-    );
   }
 
   String _stepOf(int n) => '${context.tr('register_step_prefix')} $n ${context.tr('register_step_of')} $_totalSteps';
@@ -257,23 +262,9 @@ class _RegisterFlowScreenState extends ConsumerState<RegisterFlowScreen> {
               title: Text(context.tr('register_also_owner')),
               subtitle: Text(context.tr('register_also_owner_subtitle'), style: const TextStyle(fontSize: 11)),
               value: _devenirBailleur,
-              onChanged: (val) => setState(() => _devenirBailleur = val ?? false),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.badge_outlined, color: Colors.grey),
-              title: Text(context.tr('register_become_agent')),
-              trailing: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: AppColors.accentGold.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(AppRadius.pill),
-                ),
-                child: Text(context.tr('common_soon'), style: const TextStyle(fontSize: 10, color: AppColors.accentGold, fontWeight: FontWeight.bold)),
-              ),
-              onTap: _showAgentBientotDisponible,
+              onChanged: (val) => setState(() {
+                _devenirBailleur = val ?? false;
+              }),
             ),
           ),
         ],
@@ -415,7 +406,9 @@ class _RegisterFlowScreenState extends ConsumerState<RegisterFlowScreen> {
                   const Divider(height: 20),
                   _recapRow(
                     Icons.villa_outlined,
-                    _devenirBailleur ? context.tr('register_recap_tenant_landlord') : context.tr('register_recap_tenant'),
+                    _devenirBailleur
+                        ? context.tr('register_recap_tenant_landlord')
+                        : context.tr('register_recap_tenant'),
                   ),
                 ],
               ),

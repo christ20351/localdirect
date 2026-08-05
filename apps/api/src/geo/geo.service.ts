@@ -1,12 +1,20 @@
-import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
+import { Injectable, OnModuleInit, Logger, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { StatutVille } from '@prisma/client';
+import { CreerVilleDto } from './dtos/creer-ville.dto';
+import { ModifierVilleDto } from './dtos/modifier-ville.dto';
+import { CreerQuartierDto } from './dtos/creer-quartier.dto';
+import { ModifierQuartierDto } from './dtos/modifier-quartier.dto';
+import { AuditService } from '../audit/audit.service';
 
 @Injectable()
 export class GeoService implements OnModuleInit {
   private readonly logger = new Logger(GeoService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private auditService: AuditService,
+  ) {}
 
   // Exécuté automatiquement au démarrage du module pour vérifier et alimenter les villes et quartiers
   async onModuleInit() {
@@ -43,6 +51,103 @@ export class GeoService implements OnModuleInit {
     });
   }
 
+  // =========================================================
+  // 🛡️ PILOTAGE MULTI-VILLES — Réservé ADMIN (ouverture/fermeture de villes,
+  // gestion des quartiers). Décisions stratégiques, pas de simple modération.
+  // =========================================================
+
+  /// ➕ Créer une nouvelle ville — ADMIN
+  async creerVille(adminId: string, dto: CreerVilleDto) {
+    const existante = await this.prisma.ville.findUnique({ where: { slug: dto.slug } });
+    if (existante) {
+      throw new ConflictException(`Une ville avec le slug "${dto.slug}" existe déjà.`);
+    }
+
+    const ville = await this.prisma.ville.create({
+      data: {
+        nom: dto.nom,
+        region: dto.region,
+        slug: dto.slug,
+        statut: dto.statut || StatutVille.FERMEE,
+        latitude: dto.latitude,
+        longitude: dto.longitude,
+      },
+    });
+
+    await this.auditService.log(adminId, 'VILLE_CREEE', 'Ville', ville.id, undefined, ville);
+    return ville;
+  }
+
+  /// ✏️ Modifier une ville (nom, région, slug, statut d'ouverture, coordonnées) — ADMIN
+  async modifierVille(adminId: string, villeId: string, dto: ModifierVilleDto) {
+    const avant = await this.prisma.ville.findUnique({ where: { id: villeId } });
+    if (!avant) {
+      throw new NotFoundException(`Ville introuvable pour l'ID : ${villeId}`);
+    }
+
+    const ville = await this.prisma.ville.update({
+      where: { id: villeId },
+      data: {
+        ...(dto.nom !== undefined ? { nom: dto.nom } : {}),
+        ...(dto.region !== undefined ? { region: dto.region } : {}),
+        ...(dto.slug !== undefined ? { slug: dto.slug } : {}),
+        ...(dto.statut !== undefined ? { statut: dto.statut } : {}),
+        ...(dto.latitude !== undefined ? { latitude: dto.latitude } : {}),
+        ...(dto.longitude !== undefined ? { longitude: dto.longitude } : {}),
+      },
+    });
+
+    await this.auditService.log(adminId, 'VILLE_MODIFIEE', 'Ville', villeId, avant, ville);
+    return ville;
+  }
+
+  /// ➕ Ajouter un quartier à une ville — ADMIN
+  async creerQuartier(adminId: string, villeId: string, dto: CreerQuartierDto) {
+    const ville = await this.prisma.ville.findUnique({ where: { id: villeId } });
+    if (!ville) {
+      throw new NotFoundException(`Ville introuvable pour l'ID : ${villeId}`);
+    }
+
+    const slug = dto.slug || dto.nom.toLowerCase().trim().replaceAll(' ', '-');
+    const existant = await this.prisma.quartier.findUnique({ where: { villeId_slug: { villeId, slug } } });
+    if (existant) {
+      throw new ConflictException(`Un quartier avec le slug "${slug}" existe déjà pour cette ville.`);
+    }
+
+    const quartier = await this.prisma.quartier.create({
+      data: {
+        villeId,
+        nom: dto.nom,
+        slug,
+        aliases: dto.aliases || [],
+      },
+    });
+
+    await this.auditService.log(adminId, 'QUARTIER_CREE', 'Quartier', quartier.id, undefined, quartier);
+    return quartier;
+  }
+
+  /// ✏️ Modifier un quartier — ADMIN
+  async modifierQuartier(adminId: string, quartierId: string, dto: ModifierQuartierDto) {
+    const avant = await this.prisma.quartier.findUnique({ where: { id: quartierId } });
+    if (!avant) {
+      throw new NotFoundException(`Quartier introuvable pour l'ID : ${quartierId}`);
+    }
+
+    const quartier = await this.prisma.quartier.update({
+      where: { id: quartierId },
+      data: {
+        ...(dto.nom !== undefined ? { nom: dto.nom } : {}),
+        ...(dto.slug !== undefined ? { slug: dto.slug } : {}),
+        ...(dto.aliases !== undefined ? { aliases: dto.aliases } : {}),
+        ...(dto.actif !== undefined ? { actif: dto.actif } : {}),
+      },
+    });
+
+    await this.auditService.log(adminId, 'QUARTIER_MODIFIE', 'Quartier', quartierId, avant, quartier);
+    return quartier;
+  }
+
   /// 🌱 Méthode de seed automatique des villes et quartiers de Douala & Yaoundé
   private async seedInitialGeoData() {
     const countVilles = await this.prisma.ville.count();
@@ -59,11 +164,7 @@ export class GeoService implements OnModuleInit {
         statut: StatutVille.OUVERTE,
         latitude: 4.0511,
         longitude: 9.7679,
-        parametres: {
-          fraisVisite: 2000,
-          commissionAgentVisite: 1400,
-          commissionPlateformeVisite: 600,
-        },
+        parametres: {},
       },
     });
 
@@ -122,11 +223,7 @@ export class GeoService implements OnModuleInit {
         statut: StatutVille.OUVERTE,
         latitude: 3.8480,
         longitude: 11.5021,
-        parametres: {
-          fraisVisite: 2000,
-          commissionAgentVisite: 1400,
-          commissionPlateformeVisite: 600,
-        },
+        parametres: {},
       },
     });
 
