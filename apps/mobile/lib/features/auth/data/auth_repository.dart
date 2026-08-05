@@ -13,9 +13,13 @@ class AuthRepository {
 
   // `serverClientId` = Web Client ID : c'est l'audience contre laquelle l'API
   // vérifie l'idToken renvoyé, y compris sur Android (voir AppConstants.googleWebClientId).
+  // `clientId` n'est utilisé que par les implémentations iOS/macOS du plugin
+  // (Android résout son client via le package + SHA-1 enregistrés côté Google,
+  // il ignore ce paramètre) — cf. AppConstants.googleIosClientId.
   final GoogleSignIn _googleSignIn = GoogleSignIn(
     scopes: ['email'],
     serverClientId: AppConstants.googleWebClientId.isNotEmpty ? AppConstants.googleWebClientId : null,
+    clientId: AppConstants.googleIosClientId.isNotEmpty ? AppConstants.googleIosClientId : null,
   );
 
   /// 🌐 Déclenche le vrai flux Google Sign-In (sélecteur de compte natif),

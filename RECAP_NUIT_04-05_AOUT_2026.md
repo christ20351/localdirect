@@ -112,21 +112,27 @@ Testé en live sur le port 3002 : accueil, robots.txt, sitemap.xml et recherche 
 
 ---
 
-## 🔐 Authentification Google — code complet, bloqué sur des credentials externes
+## 🔐 Authentification Google (Android + iOS) — code complet, bloqué sur des credentials externes
 
-Ce n'est **pas** un chantier de code inachevé — c'est déjà entièrement implémenté des deux côtés, proprement, avec repli gracieux :
+Ce n'est **pas** un chantier de code inachevé — c'est entièrement implémenté des trois côtés (backend, Android, iOS), proprement, avec repli gracieux :
 - Backend (`apps/api/src/auth/auth.service.ts`) : vérifie un `idToken` Google via `google-auth-library`, crée ou relie le compte.
 - Mobile (`login_screen.dart` / `auth_repository.dart`) : vrai flux `google_sign_in` natif, bouton qui affiche "Bientôt disponible" tant que ce n'est pas configuré plutôt que de planter.
+- iOS (`ios/Runner/Info.plist`) : le schéma d'URL nécessaire au retour vers l'app après connexion est en place, avec un placeholder à remplacer (voir étape 4).
 
-**Ce qu'il te manque, et que je ne peux pas générer moi-même** (nécessite un accès à ta Google Cloud Console) :
-1. Créer un OAuth Client ID type **"Application Web"** → coller la valeur dans `apps/api/.env` sous `GOOGLE_CLIENT_ID=`
-2. Créer un second OAuth Client ID type **"Android"** avec :
+**Ce qu'il te manque, et que je ne peux pas générer moi-même** (nécessite un accès à ta Google Cloud Console — 3 OAuth Client ID à créer au total) :
+
+1. Créer un OAuth Client ID type **"Application Web"** → coller la valeur dans `apps/api/.env` sous `GOOGLE_CLIENT_ID=`, puis dans `apps/mobile/lib/core/config/constants.dart`, constante `googleWebClientId` (sert pour Android ET iOS — c'est l'audience que le backend vérifie).
+2. Créer un OAuth Client ID type **"Android"** avec :
    - Package name : `cm.locadirect.locadirect_mobile`
    - SHA-1 (keystore de debug actuel) : `22:6C:85:05:F7:91:B7:14:8C:01:F5:99:00:69:4E:A7:C5:94:FD:7E`
    - (Pour une release plus tard, il faudra ajouter le SHA-1 du keystore de release quand il existera)
-3. Coller le **Client ID Web** (pas l'Android) dans `apps/mobile/lib/core/config/constants.dart`, constante `googleWebClientId`
+   - Rien à coller côté code pour celui-ci — Android le détecte automatiquement via Play Services.
+3. Créer un OAuth Client ID type **"iOS"** avec :
+   - Bundle ID : `cm.locadirect.locadirectMobile` (attention, différent du package Android — pas de underscore, c'est le vrai identifiant tel que défini dans `Runner.xcodeproj`)
+   - Coller la valeur dans `apps/mobile/lib/core/config/constants.dart`, constante `googleIosClientId`
+4. Prendre ce même Client ID iOS et l'inverser en schéma d'URL (ex. `123456-abc.apps.googleusercontent.com` → `com.googleusercontent.apps.123456-abc`), puis remplacer `REPLACE_WITH_IOS_CLIENT_ID_REVERSED` dans `apps/mobile/ios/Runner/Info.plist` (clé `CFBundleURLTypes`, commentaire juste au-dessus qui explique quoi faire) par cette valeur.
 
-Une fois ces 3 étapes faites, la connexion Google devrait marcher directement, aucun changement de code nécessaire.
+Une fois ces 4 étapes faites, la connexion Google devrait marcher directement sur les trois plateformes, aucun autre changement de code nécessaire. Teste iOS spécifiquement une fois configuré — c'est la plateforme la plus fragile de ce flux (le schéma d'URL doit être exact, une faute de frappe et la redirection après connexion reste bloquée).
 
 ---
 

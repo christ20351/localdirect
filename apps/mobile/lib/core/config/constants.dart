@@ -25,7 +25,24 @@ class AppConstants {
   /// vérifie l'idToken (`serverClientId` passé à GoogleSignIn). Le client Android
   /// (package + SHA-1) est enregistré séparément côté Google et détecté
   /// automatiquement par le plugin — il n'a pas besoin d'être codé ici.
-  static const String googleWebClientId = '';
+  ///
+  /// Package Android à enregistrer dans Google Cloud Console (OAuth Client ID
+  /// type "Android") : cm.locadirect.locadirect_mobile
+  static const String googleWebClientId =
+      '730615905965-truni6i06cvkt6n9hijehubj1q7l3n7m.apps.googleusercontent.com';
+
+  /// Client ID Google OAuth type "iOS" (Google Cloud Console). Contrairement à
+  /// Android, iOS a besoin de ce client id explicitement côté Dart (passé à
+  /// `GoogleSignIn(clientId: ...)` dans auth_repository.dart) ET du schéma
+  /// d'URL "reversed" correspondant déclaré dans ios/Runner/Info.plist
+  /// (clé CFBundleURLTypes — voir le commentaire à cet endroit du fichier).
+  ///
+  /// Bundle ID à enregistrer dans Google Cloud Console (OAuth Client ID type
+  /// "iOS") : cm.locadirect.locadirectMobile (ATTENTION : différent du
+  /// package Android, pas de underscore ici — c'est le vrai identifiant iOS
+  /// tel que défini dans ios/Runner.xcodeproj).
+  static const String googleIosClientId =
+      '730615905965-0vut1a0ponpgt1fragt1plgcaao80s52.apps.googleusercontent.com';
 
   static bool get isGoogleSignInConfigured => googleWebClientId.isNotEmpty;
 }
