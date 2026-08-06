@@ -11,6 +11,8 @@ import '../features/bailleur/presentation/bailleur_home_screen.dart';
 import '../features/bailleur/presentation/ajouter_bien_screen.dart';
 import '../features/bailleur/models/bien_model.dart';
 
+import '../features/staff/presentation/staff_moderation_screen.dart';
+
 final appRouter = GoRouter(
   initialLocation: '/splash',
   routes: [
@@ -39,6 +41,11 @@ final appRouter = GoRouter(
         final bien = state.extra as BienModel?;
         return AjouterBienScreen(bienToEdit: bien);
       },
+    ),
+
+    GoRoute(
+      path: '/staff/moderation',
+      builder: (context, state) => const StaffModerationScreen(),
     ),
     GoRoute(
       path: '/candidatures',

@@ -17,24 +17,6 @@ class VisitesRepository {
     }
   }
 
-  /// 💳 Payer les frais de visite — POST /visites/:id/payer
-  Future<Map<String, dynamic>> payerVisite(String visiteId, {required String methode, required String numero}) async {
-    try {
-      final response = await _dio.post('/visites/$visiteId/payer', data: {
-        'methode': methode,
-        'numero': numero,
-      });
-      final data = response.data as Map<String, dynamic>;
-      return {
-        'success': true,
-        'statutPaiement': data['statutPaiement'],
-        'visite': VisitModel.fromJson(data['visite'] as Map<String, dynamic>),
-      };
-    } on DioException catch (e) {
-      return {'success': false, 'message': e.response?.data['message'] ?? 'Échec du paiement.'};
-    }
-  }
-
   /// ✅ Confirmer que le bien correspond à l'annonce — POST /visites/:id/confirmer
   Future<Map<String, dynamic>> confirmerVisite(String visiteId) async {
     try {

@@ -28,6 +28,38 @@ class _CandidatureFormSheetState extends ConsumerState<CandidatureFormSheet> {
   String _garantLien = 'PARENT';
   bool _avecGarant = false;
   bool _isSubmitting = false;
+  bool _garantPrerempli = false;
+
+  static const _liensGarantConnus = {'PARENT', 'EMPLOYEUR', 'AMI'};
+
+  @override
+  void initState() {
+    super.initState();
+    // Dossier locataire portable (spec §1.4.C) : préremplit le garant avec
+    // celui de la dernière candidature soumise par ce locataire (`GET
+    // /moi/candidatures`, trié du plus récent au plus ancien côté API),
+    // pour éviter de le ressaisir à chaque nouvelle candidature. Reste
+    // entièrement modifiable — ce n'est qu'une suggestion de départ.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final candidatures = ref.read(candidaturesProvider);
+      final derniereAvecGarant = candidatures
+          .where((c) => c.garant != null && c.garant!.nomComplet.isNotEmpty)
+          .toList();
+      if (derniereAvecGarant.isEmpty) return;
+      final garant = derniereAvecGarant.first.garant!;
+      setState(() {
+        _avecGarant = true;
+        _garantPrerempli = true;
+        _garantNomCtrl.text = garant.nomComplet;
+        _garantTelCtrl.text = garant.telephone;
+        _garantProfessionCtrl.text = garant.profession ?? '';
+        if (garant.lien != null && _liensGarantConnus.contains(garant.lien)) {
+          _garantLien = garant.lien!;
+        }
+      });
+    });
+  }
 
   Map<String, String> _sourcesRevenu(BuildContext context) => {
         'SALAIRE': context.tr('candidature_source_salaire'),
@@ -145,6 +177,9 @@ class _CandidatureFormSheetState extends ConsumerState<CandidatureFormSheet> {
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 title: Text(context.tr('candidature_add_guarantor')),
+                subtitle: _garantPrerempli
+                    ? Text(context.tr('candidature_guarantor_prefilled'), style: const TextStyle(color: AppColors.primary, fontSize: 11))
+                    : null,
                 value: _avecGarant,
                 onChanged: (v) => setState(() => _avecGarant = v),
               ),

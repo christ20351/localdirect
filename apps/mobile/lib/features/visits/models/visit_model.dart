@@ -69,9 +69,9 @@ extension VisitStatusX on VisitStatus {
     }
   }
 
-  /// `true` si le locataire peut encore confirmer/contester cette visite.
-  bool get peutEtreClotureeParLocataire =>
-      this == VisitStatus.payee || this == VisitStatus.planifiee || this == VisitStatus.checkIn || this == VisitStatus.realisee;
+  /// `true` si le locataire peut encore confirmer/contester cette visite (contact
+  /// direct avec le bailleur désormais : plus de paiement ni de check-in agent).
+  bool get peutEtreClotureeParLocataire => this == VisitStatus.demandee;
 }
 
 class VisitAnnonceSummary {
@@ -80,8 +80,18 @@ class VisitAnnonceSummary {
   final String? ville;
   final String? quartier;
   final String? photo;
+  final String? bailleurTel;
+  final String? bailleurWhatsapp;
 
-  const VisitAnnonceSummary({required this.id, required this.titre, this.ville, this.quartier, this.photo});
+  const VisitAnnonceSummary({
+    required this.id,
+    required this.titre,
+    this.ville,
+    this.quartier,
+    this.photo,
+    this.bailleurTel,
+    this.bailleurWhatsapp,
+  });
 
   factory VisitAnnonceSummary.fromJson(Map<String, dynamic> json) {
     return VisitAnnonceSummary(
@@ -90,6 +100,8 @@ class VisitAnnonceSummary {
       ville: json['ville'] as String?,
       quartier: json['quartier'] as String?,
       photo: json['photo'] as String?,
+      bailleurTel: json['bailleurTel'] as String?,
+      bailleurWhatsapp: json['bailleurWhatsapp'] as String?,
     );
   }
 }
@@ -98,12 +110,9 @@ class VisitModel {
   final String id;
   final String annonceId;
   final VisitStatus status;
-  final int feeAmountXAF;
-  final String? confirmationCode;
   final String? motifContestation;
   final DateTime? scheduledTime;
   final DateTime? confirmeeLe;
-  final DateTime? rembourseLe;
   final DateTime createdAt;
   final VisitAnnonceSummary? annonce;
 
@@ -111,12 +120,9 @@ class VisitModel {
     required this.id,
     required this.annonceId,
     required this.status,
-    required this.feeAmountXAF,
-    this.confirmationCode,
     this.motifContestation,
     this.scheduledTime,
     this.confirmeeLe,
-    this.rembourseLe,
     required this.createdAt,
     this.annonce,
   });
@@ -126,12 +132,9 @@ class VisitModel {
       id: json['id'] as String,
       annonceId: json['annonceId'] as String,
       status: VisitStatus.fromApi(json['statut'] as String? ?? ''),
-      feeAmountXAF: (json['fraisXAF'] as num?)?.toInt() ?? 0,
-      confirmationCode: json['codeConfirmation'] as String?,
       motifContestation: json['motifContestation'] as String?,
       scheduledTime: json['creneauDebut'] != null ? DateTime.tryParse(json['creneauDebut'] as String) : null,
       confirmeeLe: json['confirmeeLe'] != null ? DateTime.tryParse(json['confirmeeLe'] as String) : null,
-      rembourseLe: json['rembourseLe'] != null ? DateTime.tryParse(json['rembourseLe'] as String) : null,
       createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ?? DateTime.now(),
       annonce: json['annonce'] != null ? VisitAnnonceSummary.fromJson(json['annonce'] as Map<String, dynamic>) : null,
     );

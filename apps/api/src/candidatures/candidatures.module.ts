@@ -5,10 +5,20 @@ import {
   CandidaturesController,
   MoiCandidaturesController,
   BailleurCandidaturesController,
+  AdminCandidaturesController,
 } from './candidatures.controller';
+import { AuditModule } from '../audit/audit.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
-  controllers: [AnnonceCandidaturesController, CandidaturesController, MoiCandidaturesController, BailleurCandidaturesController],
+  imports: [AuditModule, NotificationsModule],
+  controllers: [
+    AnnonceCandidaturesController,
+    CandidaturesController,
+    MoiCandidaturesController,
+    BailleurCandidaturesController,
+    AdminCandidaturesController,
+  ],
   providers: [CandidaturesService],
   exports: [CandidaturesService],
 })

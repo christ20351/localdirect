@@ -49,6 +49,29 @@
 	</dict>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<!--
+	  Google Sign-In (iOS) : schéma d'URL "reversed client id" pour que
+	  Safari/ASWebAuthenticationSession puisse rediriger vers l'app une fois
+	  la connexion Google terminée. Sans ça, le flux se bloque après le choix
+	  du compte Google (l'app ne reprend jamais la main).
+
+	  Correspond au client OAuth iOS créé dans Google Cloud Console (Bundle ID
+	  cm.locadirect.locadirectMobile — cf. lib/core/config/constants.dart,
+	  AppConstants.googleIosClientId), inversé : le Client ID
+	  "730615905965-0vut1a0ponpgt1fragt1plgcaao80s52.apps.googleusercontent.com"
+	  devient le schéma "com.googleusercontent.apps.730615905965-0vut1a0ponpgt1fragt1plgcaao80s52".
+	-->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.730615905965-0vut1a0ponpgt1fragt1plgcaao80s52</string>
+			</array>
+		</dict>
+	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

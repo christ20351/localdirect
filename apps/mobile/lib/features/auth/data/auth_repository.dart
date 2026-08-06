@@ -13,9 +13,13 @@ class AuthRepository {
 
   // `serverClientId` = Web Client ID : c'est l'audience contre laquelle l'API
   // vérifie l'idToken renvoyé, y compris sur Android (voir AppConstants.googleWebClientId).
+  // `clientId` n'est utilisé que par les implémentations iOS/macOS du plugin
+  // (Android résout son client via le package + SHA-1 enregistrés côté Google,
+  // il ignore ce paramètre) — cf. AppConstants.googleIosClientId.
   final GoogleSignIn _googleSignIn = GoogleSignIn(
     scopes: ['email'],
     serverClientId: AppConstants.googleWebClientId.isNotEmpty ? AppConstants.googleWebClientId : null,
+    clientId: AppConstants.googleIosClientId.isNotEmpty ? AppConstants.googleIosClientId : null,
   );
 
   /// 🌐 Déclenche le vrai flux Google Sign-In (sélecteur de compte natif),
@@ -92,6 +96,7 @@ class AuthRepository {
       return {
         'success': true,
         'utilisateur': data['utilisateur'],
+        'intentionBailleur': data['intentionBailleur'] == true,
       };
     } on DioException catch (e) {
       return {
@@ -170,12 +175,15 @@ class AuthRepository {
   }
 
   /// 🏠 Ajoute le rôle Bailleur au compte connecté — POST /auth/devenir-bailleur
-  Future<bool> devenirBailleur() async {
+  /// Échoue tant que 2 documents de preuve de propriété n'ont pas été validés
+  /// par le Staff (voir DocumentsRepository) : le message d'erreur réel du
+  /// serveur est renvoyé pour guider l'utilisateur plutôt qu'un simple booléen.
+  Future<Map<String, dynamic>> devenirBailleur() async {
     try {
       await _dio.post('/auth/devenir-bailleur');
-      return true;
-    } on DioException {
-      return false;
+      return {'success': true};
+    } on DioException catch (e) {
+      return {'success': false, 'message': e.response?.data['message'] ?? 'Échec de la demande.'};
     }
   }
 

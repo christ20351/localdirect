@@ -83,6 +83,28 @@ class CandidatureLocataireSummary {
   }
 }
 
+/// Garant rattaché à un dossier de candidature — `GET /moi/candidatures`
+/// renvoie ces infos par dossier (le backend persiste `Garant` indépendamment,
+/// réutilisable), ce qui permet de préremplir un nouveau formulaire de
+/// candidature avec le dernier garant déclaré (voir `CandidatureFormSheet`).
+class CandidatureGarantSummary {
+  final String nomComplet;
+  final String telephone;
+  final String? profession;
+  final String? lien;
+
+  const CandidatureGarantSummary({required this.nomComplet, required this.telephone, this.profession, this.lien});
+
+  factory CandidatureGarantSummary.fromJson(Map<String, dynamic> json) {
+    return CandidatureGarantSummary(
+      nomComplet: json['nomComplet'] as String? ?? '',
+      telephone: json['telephone'] as String? ?? '',
+      profession: json['profession'] as String?,
+      lien: json['lien'] as String?,
+    );
+  }
+}
+
 class CandidatureModel {
   final String id;
   final String annonceId;
@@ -95,6 +117,7 @@ class CandidatureModel {
   final DateTime? soumiseLe;
   final CandidatureAnnonceSummary? annonce;
   final CandidatureLocataireSummary? locataire;
+  final CandidatureGarantSummary? garant;
 
   const CandidatureModel({
     required this.id,
@@ -108,6 +131,7 @@ class CandidatureModel {
     this.soumiseLe,
     this.annonce,
     this.locataire,
+    this.garant,
   });
 
   factory CandidatureModel.fromJson(Map<String, dynamic> json) {
@@ -123,6 +147,7 @@ class CandidatureModel {
       soumiseLe: json['soumiseLe'] != null ? DateTime.tryParse(json['soumiseLe'] as String) : null,
       annonce: json['annonce'] != null ? CandidatureAnnonceSummary.fromJson(json['annonce'] as Map<String, dynamic>) : null,
       locataire: json['locataire'] != null ? CandidatureLocataireSummary.fromJson(json['locataire'] as Map<String, dynamic>) : null,
+      garant: json['garant'] != null ? CandidatureGarantSummary.fromJson(json['garant'] as Map<String, dynamic>) : null,
     );
   }
 }

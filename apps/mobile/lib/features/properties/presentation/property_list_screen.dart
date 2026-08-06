@@ -12,6 +12,7 @@ import '../../auth/presentation/auth_provider.dart';
 import '../../visits/presentation/visites_provider.dart';
 import '../../visits/models/visit_model.dart';
 import '../../alertes/presentation/alertes_provider.dart';
+import '../../../core/utils/session_reset.dart';
 
 class PropertyListScreen extends ConsumerStatefulWidget {
   const PropertyListScreen({super.key});
@@ -247,7 +248,7 @@ class _PropertyListScreenState extends ConsumerState<PropertyListScreen> {
   Widget _buildVisitCard(VisitModel visite) {
     final statutColor = switch (visite.status) {
       VisitStatus.confirmee => Colors.green,
-      VisitStatus.remboursee || VisitStatus.contestee || VisitStatus.annulee || VisitStatus.noShow => AppColors.crimson,
+      VisitStatus.contestee || VisitStatus.annulee => AppColors.crimson,
       VisitStatus.demandee => Colors.grey,
       _ => AppColors.accentGold,
     };
@@ -260,20 +261,11 @@ class _PropertyListScreenState extends ConsumerState<PropertyListScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Chip(
-                  label: Text(context.tr(visite.status.labelKey), style: const TextStyle(fontSize: 11)),
-                  backgroundColor: statutColor.withValues(alpha: 0.15),
-                  labelStyle: TextStyle(color: statutColor, fontWeight: FontWeight.bold),
-                  side: BorderSide.none,
-                ),
-                Text(
-                  '${CurrencyFormatter.formatXAF(visite.feeAmountXAF)} ${visite.status == VisitStatus.demandee ? context.tr('visit_fee_to_pay') : context.tr('visit_fee_paid')}',
-                  style: TextStyle(color: Colors.grey[400], fontSize: 12),
-                ),
-              ],
+            Chip(
+              label: Text(context.tr(visite.status.labelKey), style: const TextStyle(fontSize: 11)),
+              backgroundColor: statutColor.withValues(alpha: 0.15),
+              labelStyle: TextStyle(color: statutColor, fontWeight: FontWeight.bold),
+              side: BorderSide.none,
             ),
             const SizedBox(height: 12),
             Text(
@@ -287,33 +279,6 @@ class _PropertyListScreenState extends ConsumerState<PropertyListScreen> {
             if (visite.motifContestation != null) ...[
               const SizedBox(height: 8),
               Text('${context.tr('visit_reported_motif')}${visite.motifContestation}', style: const TextStyle(color: AppColors.crimson, fontSize: 12)),
-            ],
-            if (visite.confirmationCode != null) ...[
-              const SizedBox(height: 12),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(AppSpacing.sm),
-                decoration: BoxDecoration(
-                  color: AppColors.accentGold.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                  border: Border.all(color: AppColors.accentGold.withValues(alpha: 0.4)),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        context.tr('visit_give_code'),
-                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
-                      ),
-                    ),
-                    Text(
-                      visite.confirmationCode!.split('').join(' '),
-                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, letterSpacing: 2, color: AppColors.accentGold),
-                    ),
-                  ],
-                ),
-              ),
             ],
             if (visite.status.peutEtreClotureeParLocataire) ...[
               const Divider(height: 24),
@@ -361,7 +326,7 @@ class _PropertyListScreenState extends ConsumerState<PropertyListScreen> {
     final motifs = {
       'INDISPONIBLE': context.tr('visit_motif_indisponible'),
       'NON_CONFORME': context.tr('visit_motif_non_conforme'),
-      'AGENT_ABSENT': context.tr('visit_motif_agent_absent'),
+      'BAILLEUR_INJOIGNABLE': context.tr('visit_motif_bailleur_injoignable'),
       'PRIX_DIFFERENT': context.tr('visit_motif_prix_different'),
     };
     String? motifChoisi;
@@ -499,14 +464,26 @@ class _PropertyListScreenState extends ConsumerState<PropertyListScreen> {
                   ? Card(
                       child: Column(
                         children: [
-                          ListTile(
-                            leading: const Icon(Icons.other_houses_outlined, color: AppColors.accentGold),
-                            title: const Text('Espace Bailleur — Patrimoine & Baux'),
-                            subtitle: const Text('Examen des candidatures et suivi fiscal (10%)'),
-                            trailing: const Icon(Icons.chevron_right),
-                            onTap: () => context.push('/bailleur'),
-                          ),
-                          const Divider(height: 1),
+                          if ((user['roles'] as List).contains('BAILLEUR')) ...[
+                            ListTile(
+                              leading: const Icon(Icons.other_houses_outlined, color: AppColors.accentGold),
+                              title: Text(context.tr('profile_bailleur_link')),
+                              subtitle: Text(context.tr('profile_bailleur_link_subtitle')),
+                              trailing: const Icon(Icons.chevron_right),
+                              onTap: () => context.push('/bailleur'),
+                            ),
+                            const Divider(height: 1),
+                          ],
+                          if ((user['roles'] as List).any((r) => r == 'STAFF' || r == 'ADMIN')) ...[
+                            ListTile(
+                              leading: const Icon(Icons.fact_check_outlined, color: AppColors.accentGold),
+                              title: Text(context.tr('profile_staff_link')),
+                              subtitle: Text(context.tr('profile_staff_link_subtitle')),
+                              trailing: const Icon(Icons.chevron_right),
+                              onTap: () => context.push('/staff/moderation'),
+                            ),
+                            const Divider(height: 1),
+                          ],
                           ListTile(
                             leading: const Icon(Icons.folder_shared_outlined, color: AppColors.primary),
                             title: Text(context.tr('profile_candidatures_link')),
@@ -549,7 +526,7 @@ class _PropertyListScreenState extends ConsumerState<PropertyListScreen> {
                         label: Text(context.tr('profile_logout'), style: const TextStyle(color: Colors.redAccent)),
                         onPressed: () async {
                           await ref.read(authRepositoryProvider).deconnexion();
-                          ref.invalidate(currentUserProvider);
+                          await invalidateSessionProviders(ref);
                           if (!context.mounted) return;
                           context.go('/auth/login');
                         },

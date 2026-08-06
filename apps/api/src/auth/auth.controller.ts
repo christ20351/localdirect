@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Get, UseGuards, Patch, Delete, ConflictException } from '@nestjs/common';
+import { Controller, Post, Body, Get, UseGuards, Patch, Delete, ConflictException, BadRequestException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { AuthService } from './auth.service';
 import { DemanderOtpDto } from './dtos/demander-otp.dto';
@@ -10,12 +10,15 @@ import { GoogleLoginDto } from './dtos/google-login.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { PrismaService } from '../prisma/prisma.service';
+import { DocumentsService } from '../documents/documents.service';
+import { TYPES_PREUVE_PROPRIETE, SEUIL_PREUVE_PROPRIETE } from '../documents/types-documents';
 
 @Controller('auth')
 export class AuthController {
   constructor(
     private authService: AuthService,
     private prisma: PrismaService,
+    private documentsService: DocumentsService,
   ) {}
 
   // 📲 Demander un code OTP par SMS ou WhatsApp
@@ -82,16 +85,25 @@ export class AuthController {
     }
   }
 
-  // 🏠 Devenir Bailleur : ajoute le rôle BAILLEUR au compte (idempotent).
-  // Contrairement au rôle Agent, l'inscription bailleur ne nécessite pas de KYC
-  // au niveau du compte (voir README_1.md §6 "Bailleur") — la vérification se
-  // fait bien par bien, au moment de la publication d'une annonce.
+  // 🏠 Devenir Bailleur : ajoute le rôle BAILLEUR au compte, une fois qu'au moins
+  // 2 des 4 documents du faisceau de preuve de propriété (README_1.md §11) ont été
+  // soumis via POST /moi/documents et validés par le Staff. Exclusif du rôle AGENT
+  // (conflit d'intérêt : un agent représente les bailleurs, il ne doit pas être
+  // juge et partie sur ses propres biens).
   @UseGuards(JwtAuthGuard)
   @Post('devenir-bailleur')
   async devenirBailleur(@CurrentUser() user: any) {
     if (user.roles.includes('BAILLEUR')) {
       return this.sansDonneesSensibles(user);
     }
+
+    const nbValides = await this.documentsService.countDocumentsCompteValides(user.id, TYPES_PREUVE_PROPRIETE);
+    if (nbValides < SEUIL_PREUVE_PROPRIETE) {
+      throw new BadRequestException(
+        `Il faut au moins ${SEUIL_PREUVE_PROPRIETE} documents de preuve de propriété validés par le Staff (facture ENEO/Camwater, CNI + selfie, titre foncier, ou ancien bail/quittance). Documents validés actuellement : ${nbValides}.`,
+      );
+    }
+
     const updatedUser = await this.prisma.utilisateur.update({
       where: { id: user.id },
       data: { roles: { push: 'BAILLEUR' } },
@@ -120,7 +132,7 @@ export class AuthController {
 
   // Retire les champs sensibles (hash du mot de passe) avant de renvoyer un utilisateur au client.
   private sansDonneesSensibles(utilisateur: any) {
-    const { motDePasseHash, ...safe } = utilisateur;
+    const { motDePasseHash, agent, ...safe } = utilisateur;
     return safe;
   }
 }

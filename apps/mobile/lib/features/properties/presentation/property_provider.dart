@@ -306,6 +306,19 @@ class FavoritesNotifier extends StateNotifier<Set<String>> {
     await prefs.setStringList(_prefsKey, state.toList());
   }
 
+  /// Efface le cache persistant des favoris. Cette clé shared_preferences
+  /// n'est PAS scindée par compte : sans cet appel explicite au moment de la
+  /// connexion/déconnexion, un nouveau `FavoritesNotifier` (recréé après
+  /// `invalidate()`) recharge au démarrage les favoris de l'ancien compte
+  /// depuis le disque avant même que `refresh()` (réseau) ait pu corriger
+  /// l'affichage — ce qui les fait apparaître, à tort, sur le compte suivant
+  /// (ou rester visibles après une déconnexion sans réseau). Voir
+  /// `session_reset.dart`.
+  static Future<void> clearPersistedCache() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_prefsKey);
+  }
+
   /// Recharge la liste depuis l'API. Ne fait rien si l'appel échoue
   /// (utilisateur non connecté ou hors-ligne) : le cache local reste affiché.
   Future<void> refresh() async {

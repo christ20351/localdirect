@@ -251,6 +251,10 @@ model DocumentVerification {
   id            String      @id @default(uuid()) @db.Uuid
   utilisateurId String      @map("utilisateur_id") @db.Uuid
   utilisateur   Utilisateur @relation("DocumentUtilisateur", fields: [utilisateurId], references: [id], onDelete: Cascade)
+  // Optionnel : rattache le document à un bien précis (preuve de propriété).
+  // `null` = document de KYC de compte (CNI/selfie bailleur ou agent).
+  bienId        String?     @map("bien_id") @db.Uuid
+  bien          Bien?       @relation(fields: [bienId], references: [id], onDelete: Cascade)
   type          String
   storageKey    String      @map("storage_key")
   hashSha256    String      @map("hash_sha256")
@@ -264,6 +268,7 @@ model DocumentVerification {
 
   garants       Garant[]
 
+  @@index([bienId])
   @@map("document_verification")
 }
 
@@ -302,6 +307,7 @@ model Bien {
   bailleurId          String?       @map("bailleur_id") @db.Uuid
   bailleur            Utilisateur?  @relation("BienBailleur", fields: [bailleurId], references: [id])
   bailleurTel         String?       @map("bailleur_tel")
+  bailleurWhatsapp    String?       @map("bailleur_whatsapp")
   creeParId           String        @map("cree_par_id") @db.Uuid
   creePar             Utilisateur   @relation("BienCreateur", fields: [creeParId], references: [id])
   villeId             String        @map("ville_id") @db.Uuid
@@ -338,6 +344,7 @@ model Bien {
   annonces            Annonce[]
   medias              Media[]
   baux                Bail[]
+  documents           DocumentVerification[]
 
   @@index([villeId, quartierId, statut])
   @@map("bien")

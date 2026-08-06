@@ -1,26 +1,41 @@
 @import "tailwindcss";
 
+/*
+ * Brand anchor: same palette as the mobile app (apps/mobile/lib/core/theme/app_theme.dart)
+ * so the two products feel related, without trying to be pixel-identical
+ * (different audience — public marketing site vs. the product itself).
+ *   primary    #059669 emerald  -> links, secondary accents
+ *   gold       #D97706 "Or Camerounais" -> primary CTAs (contact / search)
+ *   slate-900  #0F172A -> headings / dark text
+ */
 :root {
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: #0f172a;
+  --color-primary: #059669;
+  --color-primary-dark: #047857;
+  --color-gold: #d97706;
+  --color-gold-dark: #b45309;
+  --color-muted: #64748b;
+  --color-border: #e2e8f0;
+  --color-surface: #f8fafc;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-brand-primary: var(--color-primary);
+  --color-brand-primary-dark: var(--color-primary-dark);
+  --color-brand-gold: var(--color-gold);
+  --color-brand-gold-dark: var(--color-gold-dark);
+  --color-brand-muted: var(--color-muted);
+  --color-brand-border: var(--color-border);
+  --color-brand-surface: var(--color-surface);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
 }
