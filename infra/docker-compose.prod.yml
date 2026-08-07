@@ -1,0 +1,121 @@
+# Stack de production LocaDirect — API NestJS + back-office Next.js + Postgres.
+#
+# Se lance TOUJOURS avec un fichier d'environnement explicite :
+#
+#   docker compose --env-file infra/.env.prod -f infra/docker-compose.prod.yml up -d --build
+#
+# Exposition réseau : seuls l'API et le back-office publient un port, et
+# uniquement sur 127.0.0.1. Le nginx de la VM les atteint en loopback ; rien
+# n'est joignable depuis le réseau. Postgres n'est joignable que depuis le
+# réseau Docker interne.
+
+name: locadirect
+
+x-logging: &logging
+  # Sans plafond, les journaux JSON de Docker remplissent le disque sur la durée.
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+services:
+  postgres:
+    image: postgres:16-bookworm
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      # Force l'authentification par mot de passe même sur le réseau Docker.
+      POSTGRES_HOST_AUTH_METHOD: scram-sha-256
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    networks: [locadirect]
+
+  # Service à durée de vie courte : applique les migrations Prisma puis sort.
+  # L'API ne démarre qu'après sa sortie en code 0, donc aucune migration ne
+  # s'applique pendant que l'API sert du trafic.
+  #
+  # Utilise l'étage `build` de l'image API : c'est le seul à contenir le CLI
+  # Prisma, ts-node et le dossier prisma/, tous absents de l'image d'exécution.
+  api-migrate:
+    build:
+      context: ../apps/api
+      target: build
+    command: ["./docker-migrate.sh"]
+    restart: "no"
+    logging: *logging
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [locadirect]
+
+  api:
+    build:
+      context: ../apps/api
+      target: runner
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      OTP_PROVIDER: ${OTP_PROVIDER:-console}
+      SMS_API_KEY: ${SMS_API_KEY:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      # GeoService et AnnoncesService amorcent des villes et des annonces de
+      # démonstration dans leur onModuleInit. Opt-in explicite : la production
+      # démarre sur une base vide.
+      SEED_DEMO_DATA: ${SEED_DEMO_DATA:-false}
+    volumes:
+      # Photos de biens, documents de vérification (CNI, preuve de propriété)
+      # et baux PDF. Sans ce volume, tout est perdu à chaque redéploiement.
+      - uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api-migrate:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:3000:3000"
+    networks: [locadirect]
+
+  admin:
+    build:
+      context: ../apps/admin
+      target: runner
+      args:
+        # URL relative : le back-office et l'API partagent la même origine
+        # derrière nginx, donc pas de préflight CORS et pas de domaine figé
+        # dans le bundle.
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-/api/v1}
+    restart: unless-stopped
+    logging: *logging
+    depends_on:
+      api:
+        condition: service_started
+    ports:
+      - "127.0.0.1:3001:3000"
+    networks: [locadirect]
+
+volumes:
+  pgdata:
+  uploads:
+
+networks:
+  locadirect:
+    driver: bridge

@@ -1,4 +1,18 @@
 {
   "extends": "./tsconfig.json",
-  "exclude": ["node_modules", "test", "dist", "**/*spec.ts"]
+  // `prisma.config.ts` et `prisma/` sont exclus volontairement. Compilés, ils
+  // remontaient la racine commune calculée par TypeScript au niveau du projet :
+  // la sortie devenait `dist/src/main.js` au lieu de `dist/main.js`, ce qui
+  // casse `npm run start:prod` (`node dist/main`).
+  // Ces deux fichiers n'ont pas besoin d'être compilés : le CLI Prisma lit
+  // `prisma.config.ts` directement, et les scripts de `prisma/` s'exécutent
+  // via ts-node.
+  "exclude": [
+    "node_modules",
+    "test",
+    "dist",
+    "**/*spec.ts",
+    "prisma.config.ts",
+    "prisma"
+  ]
 }

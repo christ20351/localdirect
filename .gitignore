@@ -21,9 +21,17 @@ infra/data/
 *.sqlite
 
 # Secrets
-
+# `.env` était absent de cette liste : apps/api/.env se retrouvait suivi par
+# git, secrets compris.
+.env
 .env.local
 .env.*.local
+infra/.env.prod
+!.env.example
+!infra/.env.prod.example
+
+# Fichiers déposés en développement local (photos, CNI, baux PDF).
+apps/api/uploads/
 
 
 # IDE

@@ -1,0 +1,25 @@
+node_modules
+dist
+build
+coverage
+.git
+.gitignore
+
+# Jamais dans l'image : les secrets viennent de l'environnement du conteneur.
+.env
+.env.*
+!.env.example
+
+# Fichiers déposés en développement local — l'image ne doit pas les embarquer,
+# la production les stocke dans un volume.
+uploads
+
+test
+*.spec.ts
+.agents
+.claude
+.windsurf
+skills-lock.json
+README.md
+Dockerfile
+.dockerignore

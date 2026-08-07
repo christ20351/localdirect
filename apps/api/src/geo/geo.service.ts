@@ -16,8 +16,11 @@ export class GeoService implements OnModuleInit {
     private auditService: AuditService,
   ) {}
 
-  // Exécuté automatiquement au démarrage du module pour vérifier et alimenter les villes et quartiers
+  // Amorçage du référentiel géographique (villes et quartiers de démonstration).
+  // Opt-in explicite : en production la base doit rester vide de données de
+  // démonstration. Poser SEED_DEMO_DATA=true pour le réactiver en local.
   async onModuleInit() {
+    if (process.env.SEED_DEMO_DATA !== 'true') return;
     await this.seedInitialGeoData();
   }
 

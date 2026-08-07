@@ -1,0 +1,44 @@
+# Route Traefik (provider fichier) : app.koryx.net → VM LocaDirect
+#
+# À déposer sur la machine frontale dans le répertoire surveillé par le
+# provider fichier — typiquement /etc/traefik/dynamic/. Traefik recharge à
+# chaud, aucun redémarrage nécessaire.
+#
+# Variante à utiliser si le frontal n'est PAS un k3s. Sinon, voir
+# k3s-locadirect.yaml.
+
+http:
+  routers:
+    locadirect:
+      rule: "Host(`app.koryx.net`)"
+      entryPoints:
+        - websecure
+      service: locadirect
+      tls:
+        # Nom du resolveur ACME déclaré dans la configuration statique de
+        # Traefik (certificatesResolvers). À adapter.
+        certResolver: letsencrypt
+
+    # Redirection du trafic en clair vers HTTPS.
+    locadirect-http:
+      rule: "Host(`app.koryx.net`)"
+      entryPoints:
+        - web
+      service: locadirect
+      middlewares:
+        - locadirect-https-redirect
+
+  middlewares:
+    locadirect-https-redirect:
+      redirectScheme:
+        scheme: https
+        permanent: true
+
+  services:
+    locadirect:
+      loadBalancer:
+        # nginx sur la VM, en HTTP clair : le TLS est terminé ici, sur le
+        # frontal. Le lien frontal ↔ VM reste sur le réseau privé 192.168.122.0/24.
+        servers:
+          - url: "http://192.168.122.40:80"
+        passHostHeader: true

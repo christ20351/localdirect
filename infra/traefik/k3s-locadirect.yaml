@@ -1,0 +1,91 @@
+# Route Traefik (k3s) : app.koryx.net → VM LocaDirect 192.168.122.40:80
+#
+# À appliquer sur la machine frontale, PAS sur la VM :
+#   kubectl apply -f k3s-locadirect.yaml
+#
+# La VM n'est pas un nœud du cluster : on décrit donc un Service sans sélecteur
+# et on lui rattache manuellement un EndpointSlice pointant sur son adresse
+# privée. C'est la façon standard de faire pointer un Ingress vers une cible
+# extérieure au cluster.
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: locadirect-vm
+  namespace: default
+spec:
+  # Aucun `selector` : les endpoints sont fournis explicitement ci-dessous.
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 80
+---
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  name: locadirect-vm-http
+  namespace: default
+  labels:
+    # Ce label est ce qui rattache la tranche au Service ci-dessus.
+    kubernetes.io/service-name: locadirect-vm
+addressType: IPv4
+ports:
+  - name: http
+    protocol: TCP
+    port: 80
+endpoints:
+  - addresses:
+      - 192.168.122.40
+    conditions:
+      ready: true
+---
+# Redirection HTTP → HTTPS, appliquée au routeur en clair.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: locadirect-https-redirect
+  namespace: default
+spec:
+  redirectScheme:
+    scheme: https
+    permanent: true
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: locadirect-http
+  namespace: default
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: Host(`app.koryx.net`)
+      kind: Rule
+      middlewares:
+        - name: locadirect-https-redirect
+      services:
+        - name: locadirect-vm
+          port: 80
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: locadirect
+  namespace: default
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`app.koryx.net`)
+      kind: Rule
+      services:
+        - name: locadirect-vm
+          port: 80
+  tls:
+    # Nom du resolveur ACME configuré sur cette installation de Traefik.
+    # À adapter — dans une installation k3s par défaut, AUCUN resolveur n'est
+    # défini : Traefik servirait alors « TRAEFIK DEFAULT CERT ». Dans ce cas,
+    # remplacer ce bloc par `secretName: <secret-tls-existant>` ou activer un
+    # resolveur ACME sur le déploiement Traefik.
+    certResolver: letsencrypt

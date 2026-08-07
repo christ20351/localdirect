@@ -18,8 +18,10 @@ export class AnnoncesService implements OnModuleInit {
     private notificationsService: NotificationsService,
   ) {}
 
-  // Initialisation automatique des annonces de démonstration au démarrage
+  // Annonces de démonstration. Opt-in explicite : sans SEED_DEMO_DATA=true,
+  // aucune annonce fictive n'est créée — la production ne doit pas en contenir.
   async onModuleInit() {
+    if (process.env.SEED_DEMO_DATA !== 'true') return;
     await this.seedDemoAnnonces();
   }
 
